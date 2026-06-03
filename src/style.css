@@ -20,9 +20,8 @@ body {
   font-family: 'Be Vietnam Pro', sans-serif;
   background-color: var(--bg-color);
   background-image: url('/IOT/background.jpg');
-  background-size: contain;
-  background-position: center top;
-  background-repeat: no-repeat;
+  background-size: 300px;
+  background-repeat: repeat;
   background-attachment: fixed;
   color: var(--dark-green);
   min-height: 100vh;
