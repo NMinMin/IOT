@@ -19,6 +19,10 @@
 body {
   font-family: 'Be Vietnam Pro', sans-serif;
   background-color: var(--bg-color);
+  background-image: url('/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--dark-green);
   min-height: 100vh;
 }
@@ -39,11 +43,7 @@ input { font-family: inherit; }
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
   position: fixed; inset: 0; z-index: 100;
-  background-color: var(--bg-color);
-  background-image: 
-    radial-gradient(circle at 10% 20%, rgba(136,171,117,0.1) 20px, transparent 21px),
-    radial-gradient(circle at 80% 80%, rgba(136,171,117,0.1) 30px, transparent 31px),
-    radial-gradient(circle at 30% 90%, rgba(136,171,117,0.05) 40px, transparent 41px);
+  background-color: transparent;
 }
 
 .login-card {
