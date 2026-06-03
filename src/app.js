@@ -57,9 +57,9 @@ function updateHeader(page) {
   weather?.classList.remove('hidden');
 
   const map = {
-    dashboard:  ['Vườn Sen Đá Của Tôi',     'Chào buổi sáng, người làm vườn! <img src="/Vector.svg" class="icon-plant" alt="Plant"/>'],
+    dashboard:  ['Vườn Sen Đá Của Tôi',     'Chào buổi sáng, người làm vườn! <img src="./Vector.svg" class="icon-plant" alt="Plant"/>'],
     statistics: ['<i data-lucide="trending-up"></i> Thống Kê & Lịch Sử',    'Theo dõi sự phát triển của vườn nhỏ <i data-lucide="clipboard-list"></i>'],
-    settings:   ['<i data-lucide="settings"></i> Cài Đặt & Thông Báo',  'Chăm sóc vườn theo cách của bạn <img src="/Vector.svg" class="icon-plant" alt="Plant"/>'],
+    settings:   ['<i data-lucide="settings"></i> Cài Đặt & Thông Báo',  'Chăm sóc vườn theo cách của bạn <img src="./Vector.svg" class="icon-plant" alt="Plant"/>'],
   };
 
   const [t, s] = map[page] || map.dashboard;

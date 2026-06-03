@@ -2,13 +2,13 @@ export const loginHTML = /* html */`
 <div id="page-login">
   <div class="login-card">
     <div class="login-left">
-      <div class="login-logo"><img src="/Vector.svg" class="icon-plant" alt="Plant"/></div>
+      <div class="login-logo"><img src="./Vector.svg" class="icon-plant" alt="Plant"/></div>
       <h1>Vườn Sen Đá Của Tôi</h1>
       <p>Chăm sóc những mầm xanh của bạn bằng tình yêu và công nghệ.</p>
     </div>
     <div class="login-right">
       <h2>Chào Mừng Trở Lại!</h2>
-      <p>Vườn sen đá đang đợi bạn đấy <img src="/Vector.svg" class="icon-plant" alt="Plant"/></p>
+      <p>Vườn sen đá đang đợi bạn đấy <img src="./Vector.svg" class="icon-plant" alt="Plant"/></p>
       <div class="form-group">
         <label for="login-email">Email hoặc Tên đăng nhập</label>
         <div class="input-wrap">
@@ -40,10 +40,10 @@ export const appHTML = /* html */`
   <header class="top-header">
     <div class="header-left">
       <button class="btn-back hidden" id="btn-back"><i data-lucide="arrow-left"></i></button>
-      <div class="header-logo"><img src="/Vector.svg" class="icon-plant" alt="Plant"/></div>
+      <div class="header-logo"><img src="./Vector.svg" class="icon-plant" alt="Plant"/></div>
       <div class="hdr-title-wrap">
         <span class="hdr-title" id="hdr-title">Vườn Sen Đá Của Tôi</span>
-        <span class="hdr-sub" id="hdr-sub">Chào buổi sáng, người làm vườn! <img src="/Vector.svg" class="icon-plant" alt="Plant"/></span>
+        <span class="hdr-sub" id="hdr-sub">Chào buổi sáng, người làm vườn! <img src="./Vector.svg" class="icon-plant" alt="Plant"/></span>
       </div>
     </div>
     <div class="header-right">
@@ -62,7 +62,7 @@ export const appHTML = /* html */`
         <button class="tab-btn" data-tab="monthly">Hàng Tháng</button>
       </div>
       <div class="avatar-wrap" id="avatar-goto-settings">
-        <img src="/doc.jpg" alt="Avatar" class="avatar" />
+        <img src="./doc.jpg" alt="Avatar" class="avatar" />
         <span class="notif-badge">2</span>
       </div>
     </div>
@@ -74,7 +74,7 @@ export const appHTML = /* html */`
 
       <!-- Hero -->
       <div class="hero-card">
-        <img src="/ngang.jpg" alt="Vườn sen đá" class="hero-img" />
+        <img src="./ngang.jpg" alt="Vườn sen đá" class="hero-img" />
         <div class="hero-overlay">
           <div class="hero-top">
             <div class="pill">
@@ -191,14 +191,14 @@ export const appHTML = /* html */`
       <!-- Plants -->
       <div class="col-2 plant-list">
         <div class="plant-chip">
-          <img src="/ngangnho.jpg" alt="Plant" />
+          <img src="./ngangnho.jpg" alt="Plant" />
           <div>
             <strong>Sen Đá Phật Bà</strong>
             <span>Sức khỏe: Rất tốt</span>
           </div>
         </div>
         <div class="plant-chip">
-          <img src="/doc.jpg" alt="Plant" />
+          <img src="./doc.jpg" alt="Plant" />
           <div>
             <strong>Sen Đá Thạch Ngọc</strong>
             <span>Sức khỏe: Bình thường</span>
@@ -355,7 +355,7 @@ export const appHTML = /* html */`
           </div>
           
           <div class="log-item">
-            <div class="log-icon green"><img src="/Vector.svg" class="icon-plant" alt="Plant"/></div>
+            <div class="log-icon green"><img src="./Vector.svg" class="icon-plant" alt="Plant"/></div>
             <div class="log-info">
               <strong>Thêm cây mới</strong>
               <span>Sen Đá Phật Bà đã được thêm vào hệ thống.</span>
@@ -386,7 +386,7 @@ export const appHTML = /* html */`
         <div class="tl-card">
           <div class="tl-num yellow">1</div>
           <div class="tl-img-wrap" style="background:#F9EED9;">
-            <img src="/ngangnho.jpg" alt="Plant"/>
+            <img src="./ngangnho.jpg" alt="Plant"/>
           </div>
           <div class="tl-title">Nảy mầm</div>
           <div class="tl-date">01/10/2023</div>
@@ -395,7 +395,7 @@ export const appHTML = /* html */`
         <div class="tl-card">
           <div class="tl-num">2</div>
           <div class="tl-img-wrap">
-            <img src="/doc.jpg" alt="Plant"/>
+            <img src="./doc.jpg" alt="Plant"/>
           </div>
           <div class="tl-title">Ra lá thật</div>
           <div class="tl-date">15/10/2023</div>
@@ -404,7 +404,7 @@ export const appHTML = /* html */`
         <div class="tl-card">
           <div class="tl-num">3</div>
           <div class="tl-img-wrap">
-            <img src="/ngangnho.jpg" alt="Plant"/>
+            <img src="./ngangnho.jpg" alt="Plant"/>
           </div>
           <div class="tl-title">Trưởng thành</div>
           <div class="tl-date">Dự kiến: 11/2023</div>
@@ -426,7 +426,7 @@ export const appHTML = /* html */`
       <!-- LEFT COLUMN -->
       <div class="settings-col-left">
         <div class="card profile-card">
-          <img src="/doc.jpg" alt="Linh Garden" />
+          <img src="./doc.jpg" alt="Linh Garden" />
           <h3>Linh Garden</h3>
           <p>Thành viên từ: 05/2023</p>
           <button class="btn-outline dark"><i data-lucide="user" style="width:18px;height:18px"></i> Chỉnh sửa hồ sơ</button>
