@@ -119,8 +119,6 @@ window.__goToWithIcons = (page) => {
 
 /* ── Avatar / Plant shortcuts → settings ── */
 document.getElementById('avatar-goto-settings').addEventListener('click', () => navigate('settings'));
-document.getElementById('plant-add').addEventListener('click', () => navigate('settings'));
-document.getElementById('btn-sys-settings').addEventListener('click', () => navigate('settings'));
 
 /* ── Lịch sử bơm modal ── */
 const btnPump = document.querySelector('.btn-pump');

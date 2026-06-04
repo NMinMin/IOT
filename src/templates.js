@@ -61,7 +61,6 @@ export const appHTML = /* html */`
       </div>
       <div class="avatar-wrap" id="avatar-goto-settings">
         <img src="./doc.jpg" alt="Avatar" class="avatar" />
-        <span class="notif-badge">2</span>
       </div>
     </div>
   </header>
@@ -190,7 +189,7 @@ export const appHTML = /* html */`
         <!-- Health Chart -->
         <div class="card chart-main">
           <div class="chart-header">
-            <h3>Biểu Đồ Sức Khỏe</h3>
+            <h3>Biểu Đồ Cường Độ Ánh Sáng</h3>
             <div class="tab-group" id="health-tabs">
               <button class="tab-btn active" data-chart="today">Hôm nay</button>
               <button class="tab-btn" data-chart="week">Tuần này</button>
@@ -201,31 +200,7 @@ export const appHTML = /* html */`
 
       </div>
 
-      <!-- Plants -->
-      <div class="col-2 plant-list">
-        <div class="plant-chip">
-          <img src="./ngangnho.jpg" alt="Plant" />
-          <div>
-            <strong>Sen Đá Phật Bà</strong>
-            <span>Sức khỏe: Rất tốt</span>
-          </div>
-        </div>
-        <div class="plant-chip">
-          <img src="./doc.jpg" alt="Plant" />
-          <div>
-            <strong>Sen Đá Thạch Ngọc</strong>
-            <span>Sức khỏe: Bình thường</span>
-          </div>
-        </div>
-        <div class="plant-chip add" id="plant-add">
-          <div class="add-circle"><i data-lucide="plus"></i></div>
-          <div>
-            <strong>Thêm Cây Mới</strong>
-            <span>Cập nhật vườn của bạn</span>
-          </div>
-        </div>
-        <button class="btn-sys-settings" id="btn-sys-settings"><i data-lucide="settings"></i> Cài Đặt Hệ Thống</button>
-      </div>
+
 
     </div>
   </div>
@@ -266,18 +241,28 @@ export const appHTML = /* html */`
       <!-- RIGHT COL -->
       <div class="col-right" style="display:flex; flex-direction:column; gap:24px;">
         <div class="monthly-card">
-          <h3><i data-lucide="award" style="color:var(--yellow);fill:var(--yellow)"></i> Tổng Kết Tháng 10</h3>
-          <div class="monthly-row"><span>Sức khỏe trung bình</span><strong style="color:var(--yellow)">94%</strong></div>
-          <div class="monthly-row"><span>Số lần tưới tự động</span><strong style="color:var(--light-blue)">18 lần</strong></div>
-          <div class="monthly-row"><span>Tiết kiệm nước</span><strong style="color:var(--primary-green)">+12%</strong></div>
+          <h3><i data-lucide="award" style="color:var(--yellow);fill:var(--yellow)"></i> Tổng Kết Tháng 6</h3>
+          <div class="monthly-row"><span>Cường độ ánh sáng TB</span><strong style="color:var(--yellow)">-- lux</strong></div>
+          <div class="monthly-row"><span>Số lần tưới tự động</span><strong style="color:var(--light-blue)">-- lần</strong></div>
+          <div class="monthly-row"><span>Tiết kiệm nước</span><strong style="color:var(--primary-green)">--%</strong></div>
         </div>
 
         <div class="log-card card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h3 style="font-size:18px;font-weight:700">Nhật Ký Hoạt Động</h3>
-            <i data-lucide="list" style="color:#A0ADA2"></i>
+            <div class="log-filter-wrap" id="log-filter-wrap">
+              <button class="log-filter-btn" id="log-filter-toggle" title="Lọc theo mục">
+                <i data-lucide="sliders-horizontal"></i>
+              </button>
+              <div class="log-filter-dropdown hidden" id="log-filter-dropdown">
+                <button class="log-filter-chip active" data-cat="all">Tất cả</button>
+                <button class="log-filter-chip" data-cat="den">Đèn LED</button>
+                <button class="log-filter-chip" data-cat="bom">Máy bơm</button>
+                <button class="log-filter-chip" data-cat="canh_bao">Cảnh báo</button>
+              </div>
+            </div>
           </div>
-          <div id="activity-log-list">
+          <div id="activity-log-list" class="activity-log-scroll">
             <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>
           </div>
         </div>
