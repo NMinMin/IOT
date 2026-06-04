@@ -103,15 +103,30 @@ void loop() {
     lux = lightMeter.readLightLevel();
     isWaterLow = (digitalRead(WATER_FLOAT_PIN) == HIGH); // HIGH là hết nước, LOW là còn nước
 
+    // Xác định trạng thái thực tế của máy bơm và đèn
+    String pumpStatus = "OFF";
+    if (digitalRead(PUMP_PIN) == PUMP_ON) {
+      if (pumpManual) pumpStatus = "ON_MANUAL";
+      else pumpStatus = "ON_AUTO";
+    }
+
+    String lightStatus = "OFF";
+    if (digitalRead(LIGHT_PIN) == LIGHT_ON) {
+      if (lightManual) lightStatus = "ON_MANUAL";
+      else lightStatus = "ON_AUTO";
+    }
+
     // 1.1 Gửi dữ liệu sensor lên Firebase
     FirebaseJson sensorJson;
     sensorJson.set("soil_raw", soilRaw);
     sensorJson.set("lux", lux);
     sensorJson.set("water_status", isWaterLow ? "HET_NUOC" : "CON_NUOC");
+    sensorJson.set("pump_status", pumpStatus);
+    sensorJson.set("light_status", lightStatus);
     
     if (Firebase.RTDB.setJSON(&fbdo, "/sensor", &sensorJson)) {
-      Serial.printf("[Firebase Send] Gửi thành công: Soil=%d, Lux=%.1f, Water=%s\n", 
-                    soilRaw, lux, isWaterLow ? "HẾT NƯỚC" : "CÒN NƯỚC");
+      Serial.printf("[Firebase Send] Gửi thành công: Soil=%d, Lux=%.1f, Water=%s, Pump=%s, Light=%s\n", 
+                    soilRaw, lux, isWaterLow ? "HẾT NƯỚC" : "CÒN NƯỚC", pumpStatus.c_str(), lightStatus.c_str());
     } else {
       Serial.println("[Firebase Error] Lỗi gửi dữ liệu cảm biến: " + fbdo.errorReason());
     }

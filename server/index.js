@@ -51,11 +51,24 @@ const sensorLogSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   soil_raw: Number,
   lux: Number,
-  water_status: String
+  water_status: String,
+  pump_status: String,
+  light_status: String
 });
 
 // Tạo Model kết nối tới database 'smart_green_house' và collection 'sensor_logs'
 const SensorLog = mongoose.model('SensorLog', sensorLogSchema, 'sensor_logs');
+
+// Định nghĩa Schema cho Nhật ký hoạt động (Activity Logs)
+const activityLogSchema = new mongoose.Schema({
+  timestamp: { type: Date, default: Date.now },
+  type: { type: String, enum: ['pump', 'light', 'water', 'system'], required: true },
+  status: { type: String, required: true },
+  message: { type: String, required: true }
+});
+
+// Tạo Model kết nối tới database 'smart_green_house' và collection 'activity_logs'
+const ActivityLog = mongoose.model('ActivityLog', activityLogSchema, 'activity_logs');
 
 // API: Lấy lịch sử dữ liệu cảm biến (giới hạn 100 bản ghi mới nhất)
 app.get('/api/logs', async (req, res) => {
@@ -69,6 +82,19 @@ app.get('/api/logs', async (req, res) => {
   } catch (error) {
     console.error('Lỗi khi truy vấn logs:', error);
     res.status(500).json({ error: 'Không thể lấy dữ liệu lịch sử.' });
+  }
+});
+
+// API: Lấy nhật ký hoạt động mới nhất (giới hạn 20 bản ghi)
+app.get('/api/activities', async (req, res) => {
+  try {
+    const activities = await ActivityLog.find()
+      .sort({ timestamp: -1 })
+      .limit(20);
+    res.json(activities);
+  } catch (error) {
+    console.error('Lỗi khi truy vấn nhật ký hoạt động:', error);
+    res.status(500).json({ error: 'Không thể lấy dữ liệu nhật ký hoạt động.' });
   }
 });
 
@@ -98,6 +124,11 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Lưu trạng thái trước đó để phát hiện thay đổi
+let lastPumpStatus = null;
+let lastLightStatus = null;
+let lastWaterStatus = null;
+
 // Logic chạy ngầm: Tự động lấy dữ liệu từ Firebase và ghi vào MongoDB Atlas
 async function syncFirebaseToMongo() {
   try {
@@ -115,17 +146,112 @@ async function syncFirebaseToMongo() {
     const data = await response.json();
     
     if (data) {
-      const { soil_raw, lux, water_status } = data;
-      
+      const { soil_raw, lux, water_status, pump_status, light_status } = data;
+      const currentPump = pump_status || 'OFF';
+      const currentLight = light_status || 'OFF';
+      const currentWater = water_status || 'UNKNOWN';
+
+      // Khôi phục trạng thái cũ từ DB nếu server mới restart
+      if (lastPumpStatus === null || lastLightStatus === null || lastWaterStatus === null) {
+        const lastLog = await SensorLog.findOne().sort({ timestamp: -1 });
+        if (lastLog) {
+          lastPumpStatus = lastLog.pump_status || 'OFF';
+          lastLightStatus = lastLog.light_status || 'OFF';
+          lastWaterStatus = lastLog.water_status || 'UNKNOWN';
+        } else {
+          lastPumpStatus = 'OFF';
+          lastLightStatus = 'OFF';
+          lastWaterStatus = 'CON_NUOC';
+        }
+      }
+
+      // Phát hiện và ghi nhận sự kiện hoạt động
+      // 1. Máy bơm
+      if (currentPump !== lastPumpStatus) {
+        let msg = '';
+        if (currentPump === 'ON_AUTO') {
+          msg = `Máy bơm đã bật tự động do đất khô (Độ ẩm: ${Math.max(0, Math.min(100, Math.round(((4095 - (soil_raw !== undefined ? soil_raw : 4095)) / 4095) * 100)))}%).`;
+        } else if (currentPump === 'ON_MANUAL') {
+          msg = 'Máy bơm đã được bật thủ công từ ứng dụng.';
+        } else if (currentPump === 'OFF') {
+          if (lastPumpStatus === 'ON_AUTO') {
+            msg = 'Máy bơm đã tắt tự động sau khi hoàn thành chu kỳ tưới.';
+          } else {
+            msg = 'Máy bơm đã được tắt.';
+          }
+        }
+        
+        if (msg) {
+          const actLog = new ActivityLog({
+            type: 'pump',
+            status: currentPump,
+            message: msg
+          });
+          await actLog.save();
+          console.log(`[Activity Log] ${msg}`);
+        }
+        lastPumpStatus = currentPump;
+      }
+
+      // 2. Đèn LED
+      if (currentLight !== lastLightStatus) {
+        let msg = '';
+        if (currentLight === 'ON_AUTO') {
+          msg = `Đèn LED tự động bật do cường độ sáng thấp (${Math.round(lux !== undefined ? lux : 0)} Lux).`;
+        } else if (currentLight === 'ON_MANUAL') {
+          msg = 'Đèn LED đã được bật thủ công từ ứng dụng.';
+        } else if (currentLight === 'OFF') {
+          if (lastLightStatus === 'ON_AUTO') {
+            msg = `Đèn LED tự động tắt khi trời sáng (${Math.round(lux !== undefined ? lux : 0)} Lux).`;
+          } else {
+            msg = 'Đèn LED đã được tắt.';
+          }
+        }
+        
+        if (msg) {
+          const actLog = new ActivityLog({
+            type: 'light',
+            status: currentLight,
+            message: msg
+          });
+          await actLog.save();
+          console.log(`[Activity Log] ${msg}`);
+        }
+        lastLightStatus = currentLight;
+      }
+
+      // 3. Mực nước
+      if (currentWater !== lastWaterStatus && currentWater !== 'UNKNOWN') {
+        let msg = '';
+        if (currentWater === 'HET_NUOC') {
+          msg = 'Cảnh báo: Bể hết nước! Máy bơm đã tự động ngắt để bảo vệ.';
+        } else if (currentWater === 'CON_NUOC') {
+          msg = 'Bể đã được châm thêm nước đầy đủ.';
+        }
+        
+        if (msg) {
+          const actLog = new ActivityLog({
+            type: 'water',
+            status: currentWater,
+            message: msg
+          });
+          await actLog.save();
+          console.log(`[Activity Log] ${msg}`);
+        }
+        lastWaterStatus = currentWater;
+      }
+
       // Tạo bản ghi log mới
       const newLog = new SensorLog({
         soil_raw: soil_raw !== undefined ? soil_raw : 4095,
         lux: lux !== undefined ? lux : 0,
-        water_status: water_status || 'UNKNOWN'
+        water_status: currentWater,
+        pump_status: currentPump,
+        light_status: currentLight
       });
       
       await newLog.save();
-      console.log(`[${new Date().toLocaleTimeString()}] Đồng bộ thành công: soil_raw=${soil_raw}, lux=${lux}, water=${water_status}`);
+      console.log(`[${new Date().toLocaleTimeString()}] Đồng bộ thành công: soil_raw=${soil_raw}, lux=${lux}, water=${currentWater}, pump=${currentPump}, light=${currentLight}`);
     } else {
       console.warn('[Sync Warning] Firebase không trả về dữ liệu tại node /sensor');
     }
