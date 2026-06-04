@@ -12,6 +12,187 @@ window.firebaseState = {
   control: { pump_manual: false, light_manual: false }
 };
 
+// ─── Mực nước bể: 500ml = 100% ───
+const WATER_PER_PUMP_PCT   = 8;  // Tự động: 5s ≈ 40ml  → 40/500 = 8%
+const WATER_PER_MANUAL_PCT = 24; // Thủ công: 10s = 120ml → 120/500 = 24%
+
+function getTankWater() {
+  const saved = parseFloat(localStorage.getItem('tankWaterPct'));
+  return isNaN(saved) ? 100 : Math.max(0, Math.min(100, saved));
+}
+
+function saveTankWater(pct) {
+  pct = Math.max(0, Math.min(100, Math.round(pct)));
+  localStorage.setItem('tankWaterPct', pct);
+  // Đồng bộ lên MongoDB Atlas (không block UI)
+  fetch(`${BACKEND_URL}/api/tank`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ water_pct: pct })
+  }).catch(err => console.warn('Không thể lưu mực nước lên MongoDB:', err));
+  return pct;
+}
+
+// Đọc mực nước từ MongoDB khi khởi động
+export async function initTankWater() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/tank`);
+    if (res.ok) {
+      const data = await res.json();
+      const pct = Math.max(0, Math.min(100, Math.round(data.water_pct)));
+      localStorage.setItem('tankWaterPct', pct);
+      setWaterValue(pct, 0, 100);
+      console.log(`>>> Mực nước bể từ MongoDB: ${pct}%`);
+    }
+  } catch (err) {
+    console.warn('Không thể tải mực nước từ MongoDB, dùng localStorage:', err);
+    setWaterValue(getTankWater(), 0, 100);
+  }
+}
+
+export function decreaseTankWater(pct = WATER_PER_PUMP_PCT) {
+  const newPct = saveTankWater(getTankWater() - pct);
+  setWaterValue(newPct, 0, 100);
+  // Hiện cảnh báo nếu mực nước < 20%
+  const alertWaterLow = document.getElementById('alert-water-low');
+  if (alertWaterLow) alertWaterLow.classList.toggle('hidden', newPct >= 20);
+  return newPct;
+}
+
+// Export hằng số để main.js dùng
+export { WATER_PER_MANUAL_PCT };
+
+/* ══════════════════════════════════════════════
+   NHẬT KÝ HOẠT ĐỘNG
+   ══════════════════════════════════════════════ */
+const ACTIVITY_LOG_KEY = 'activityLog';
+
+// Migration: xóa dữ liệu cũ (dạng phẳng) nếu còn trong localStorage
+(function migrateLocalStorage() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+    // Format cũ: mảng các object có field 'type' (phẳng)
+    // Format mới: mảng các object có field 'date' + den/bom/canh_bao
+    if (Array.isArray(raw) && raw.length > 0 && raw[0].type !== undefined && raw[0].date === undefined) {
+      localStorage.removeItem(ACTIVITY_LOG_KEY);
+      console.log('>>> Đã xóa activityLog cũ khỏi localStorage.');
+    }
+  } catch (_) {}
+})();
+
+export function addActivityLog(type, title, desc) {
+  // Map type → category
+  const CAT_MAP = {
+    light_on: 'den', light_off: 'den',
+    water_auto: 'bom', water_manual: 'bom', pump_off: 'bom',
+    water_low: 'canh_bao', emergency: 'canh_bao',
+  };
+  const cat = CAT_MAP[type] || 'canh_bao';
+  const now  = new Date();
+  const dateStr = now.toLocaleDateString('sv-SE'); // YYYY-MM-DD (locale sv-SE = ISO)
+  const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const action  = desc ? `${title} – ${desc}` : title;
+
+  // 1. Cập nhật localStorage theo format nhóm ngày
+  const store = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+  let dayDoc  = store.find(d => d.date === dateStr);
+  if (!dayDoc) {
+    dayDoc = { date: dateStr, den: [], bom: [], canh_bao: [] };
+    store.unshift(dayDoc);
+  }
+  dayDoc[cat].unshift({ time: timeStr, action });
+  localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(store.slice(0, 7)));
+  _renderFromStorage();
+
+  // 2. Đẩy lên MongoDB Atlas (không block UI)
+  fetch(`${BACKEND_URL}/api/activity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, title, desc })
+  }).catch(err => console.warn('Không thể lưu nhật ký lên MongoDB:', err));
+}
+
+// Render đồng bộ từ localStorage
+function _renderFromStorage() {
+  const container = document.getElementById('activity-log-list');
+  if (!container) return;
+  const days = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+  _paintLogs(container, days);
+}
+
+// Render bất đồng bộ: fetch MongoDB → cập nhật localStorage → vẽ lại
+export function renderActivityLog() {
+  const container = document.getElementById('activity-log-list');
+  if (!container) return;
+
+  _renderFromStorage(); // Hiện localStorage ngay
+
+  fetch(`${BACKEND_URL}/api/activity`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (Array.isArray(data) && data.length > 0) {
+        localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(data));
+        _paintLogs(container, data);
+      }
+    })
+    .catch(() => {});
+}
+
+// Vẽ nhật ký nhóm theo ngày → nhóm theo mục (đèn / bơm / cảnh báo)
+function _paintLogs(container, days) {
+  if (!days || days.length === 0) {
+    container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>';
+    return;
+  }
+
+  const todayStr     = new Date().toLocaleDateString('sv-SE');
+  const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
+
+  function dayLabel(dateStr) {
+    if (dateStr === todayStr)     return 'Hôm nay';
+    if (dateStr === yesterdayStr) return 'Hôm qua';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  const CATS = [
+    { key: 'den',      label: 'Đèn LED',   icon: 'sun',           color: 'yellow' },
+    { key: 'bom',      label: 'Máy bơm',   icon: 'droplet',       color: 'blue'   },
+    { key: 'canh_bao', label: 'Cảnh báo',  icon: 'alert-triangle', color: 'red'   },
+  ];
+
+  container.innerHTML = days.map((day, idx) => {
+    const catBlocks = CATS
+      .filter(c => Array.isArray(day[c.key]) && day[c.key].length > 0)
+      .map(c => {
+        const rows = day[c.key].map(e => `
+          <div class="log-item">
+            <div class="log-icon ${c.color}"><i data-lucide="${c.icon}"></i></div>
+            <div class="log-info"><strong>${e.action}</strong></div>
+            <span class="log-time">${e.time}</span>
+          </div>`).join('');
+        return `
+          <div class="log-cat-group">
+            <div class="log-cat-header">
+              <i data-lucide="${c.icon}" class="log-cat-icon ${c.color}"></i>
+              ${c.label}
+              <span class="log-cat-count">${day[c.key].length}</span>
+            </div>
+            ${rows}
+          </div>`;
+      }).join('');
+
+    return `
+      <div class="log-day-group${idx === 0 ? ' first' : ''}">
+        <div class="log-day-header">${dayLabel(day.date)}</div>
+        ${catBlocks || '<p style="color:#8A968C;font-size:13px;padding:6px 12px">Không có hoạt động.</p>'}
+      </div>`;
+  }).join('');
+
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+}
+
+
 let currentPage = 'dashboard';
 let prevPage    = null;
 let healthChart = null;
@@ -40,13 +221,14 @@ export function goTo(page) {
 
   // Lazy init charts
   if (page === 'dashboard')  initHealthChart();
-  if (page === 'statistics') { initStatChart(); initWaterChart(); }
+  if (page === 'statistics') { initStatChart(); initWaterChart(); renderActivityLog(); }
 
   // Animate tank
   if (page === 'dashboard') {
     setTimeout(() => {
       const isWaterLow = window.firebaseState.sensor.water_status === 'HET_NUOC';
-      setWaterValue(isWaterLow ? 12 : 92, 0, 100);
+      if (isWaterLow) saveTankWater(5);
+      setWaterValue(getTankWater(), 0, 100);
     }, 300);
   }
 
@@ -113,11 +295,34 @@ export function setWaterValue(val, min = 0, max = 100) {
     else if (pct < 75) subEl.textContent = 'Ổn định';
     else subEl.textContent = 'Đầy';
   }
+
+  // Cập nhật mục lưu ý: Bể 500ml = 100% -> 1% = 5ml
+  const tankNote = document.querySelector('.tank-note');
+  if (tankNote) {
+    const neededMl = (100 - pct) * 5;
+    if (neededMl <= 0) {
+      tankNote.classList.add('full');
+      tankNote.innerHTML = `Bể nước đã đầy.`;
+    } else {
+      tankNote.classList.remove('full');
+      tankNote.innerHTML = `<strong>LƯU Ý</strong> Cần thêm ${neededMl} ml để đầy bể.`;
+    }
+  }
+
+  // Cập nhật phần trăm trong cảnh báo mực nước thấp
+  const alertWaterLow = document.getElementById('alert-water-low');
+  if (alertWaterLow) {
+    const alertSpan = alertWaterLow.querySelector('span');
+    if (alertSpan) {
+      alertSpan.textContent = `Bể nước chỉ còn ${pct}% - Vui lòng châm thêm.`;
+    }
+  }
 }
 
-// Hàm khởi chạy đồng bộ với Firebase (thay thế cho trình giả lập)
+// Hàm khởi chạy đồng bộ với Firebase và tải mực nước từ MongoDB
 export function startSensorSim() {
   initFirebaseSync();
+  initTankWater(); // Tải mực nước bể từ MongoDB Atlas
 }
 
 /* ── Dark mode ── */
@@ -156,7 +361,7 @@ export function initFirebaseSync() {
   const dbUrl = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL : `${FIREBASE_DB_URL}/`;
   const streamUrl = `${dbUrl}.json?auth=${FIREBASE_SECRET}`;
   
-  console.log('>>> Bắt đầu kết nối EventSource tới Firebase:', FIREBASE_DB_URL);
+  console.log('>>> Bắt đầu kết nối EventSource...');
   const eventSource = new EventSource(streamUrl);
   
   eventSource.addEventListener('put', (e) => {
@@ -229,9 +434,18 @@ function updateUIFromFirebaseState() {
     alertWaterLow.classList.toggle('hidden', !isWaterLow);
   }
   
-  // Cập nhật mực nước trên bình chứa hình giọt nước
-  const pct = isWaterLow ? 12 : 92;
-  setWaterValue(pct, 0, 100);
+  // Cập nhật mực nước bể theo lượng nước thực tế đã tưới
+  if (isWaterLow) {
+    saveTankWater(5); // Cảm biến báo hết nước → set về ~5%
+    // Ghi nhật ký cảnh báo (chỉ 1 lần, không trùng)
+    if (!window._waterLowLogged) {
+      window._waterLowLogged = true;
+      addActivityLog('water_low', 'Cảnh báo: Hết nước!', 'Cảm biến xác nhận bể chứa đã cạn.');
+    }
+  } else {
+    window._waterLowLogged = false;
+  }
+  setWaterValue(getTankWater(), 0, 100);
 
   // 3. Cập nhật switch điều khiển thiết bị thủ công (nếu phần tử tồn tại)
   const pumpManualSw = document.getElementById('control-pump-manual');
@@ -357,18 +571,62 @@ async function initHealthChart() {
     options: chartOpts({ legend: true })
   });
 
-  // Gắn sự kiện tab thu nhỏ
-  document.querySelectorAll('.tab-mini-btn').forEach(btn => {
+  // ── Hàm gom nhóm logs theo ngày trong tuần (trả về avg lux & hum mỗi ngày)
+  function aggregateByDay(sourceLogs) {
+    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const now = new Date();
+    const groups = {};
+
+    // Khởi tạo 7 ngày gần nhất
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const key = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      groups[key] = { lux: [], hum: [], label: `${dayNames[d.getDay()]} ${key}` };
+    }
+
+    // Gom log vào ngày tương ứng
+    sourceLogs.forEach(log => {
+      const d = new Date(log.timestamp);
+      const key = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      if (groups[key]) {
+        groups[key].lux.push(Math.round(log.lux));
+        groups[key].hum.push(Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
+      }
+    });
+
+    const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+    const days = Object.values(groups);
+    return {
+      labels: days.map(d => d.label),
+      lux:    days.map(d => avg(d.lux)),
+      hum:    days.map(d => avg(d.hum))
+    };
+  }
+
+  // ── Gắn sự kiện tab #health-tabs
+  document.querySelectorAll('#health-tabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-mini-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#health-tabs .tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const t = btn.dataset.chart;
-      const isToday = t === 'today';
-      
-      const filtered = isToday ? logs.slice(-10) : logs.slice(-24); // Show more logs for weekly/long
-      healthChart.data.labels = filtered.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
-      healthChart.data.datasets[0].data = filtered.map(log => Math.round(log.lux));
-      healthChart.data.datasets[1].data = filtered.map(log => Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
+      const mode = btn.dataset.chart;
+
+      if (mode === 'today') {
+        // Hôm nay: 10 bản ghi mới nhất theo giờ
+        const filtered = logs.slice(-10);
+        healthChart.data.labels = filtered.map(log =>
+          new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+        healthChart.data.datasets[0].data = filtered.map(log => Math.round(log.lux));
+        healthChart.data.datasets[1].data = filtered.map(log =>
+          Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
+      } else {
+        // Tuần này: gom nhóm theo ngày, tính trung bình
+        const weekly = aggregateByDay(logs);
+        healthChart.data.labels = weekly.labels;
+        healthChart.data.datasets[0].data = weekly.lux;
+        healthChart.data.datasets[1].data = weekly.hum;
+      }
+
       healthChart.update('active');
     });
   });
@@ -555,3 +813,107 @@ function tooltipStyle() {
     titleColor: '#2c3e2d', bodyColor: '#4a6050', padding: 10
   };
 }
+
+/* ── Lịch sử bơm modal ── */
+export function openPumpHistoryModal() {
+  const modal = document.getElementById('modal-pump-history');
+  const content = document.getElementById('pump-history-content');
+  if (!modal || !content) return;
+
+  modal.classList.remove('hidden');
+  content.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Đang tải dữ liệu lịch sử...</p>';
+
+  // Fetch mới từ server
+  fetch(`${BACKEND_URL}/api/activity`)
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (Array.isArray(data) && data.length > 0) {
+        // Lưu vào localStorage luôn để đồng bộ
+        localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(data));
+        _paintPumpLogs(content, data);
+      } else {
+        // Thử lấy từ localStorage nếu offline
+        const localData = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+        if (localData.length > 0) {
+          _paintPumpLogs(content, localData);
+        } else {
+          content.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có lịch sử hoạt động máy bơm.</p>';
+        }
+      }
+    })
+    .catch(() => {
+      // Offline fallback
+      const localData = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
+      if (localData.length > 0) {
+        _paintPumpLogs(content, localData);
+      } else {
+        content.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Không thể tải lịch sử. Vui lòng thử lại sau.</p>';
+      }
+    });
+}
+
+function _paintPumpLogs(container, days) {
+  // Lọc chỉ lấy những ngày có hoạt động bơm
+  const daysWithPump = days.filter(day => Array.isArray(day.bom) && day.bom.length > 0);
+  
+  if (daysWithPump.length === 0) {
+    container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có lịch sử hoạt động máy bơm.</p>';
+    return;
+  }
+
+  const todayStr     = new Date().toLocaleDateString('sv-SE');
+  const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
+
+  function dayLabel(dateStr) {
+    if (dateStr === todayStr)     return 'Hôm nay';
+    if (dateStr === yesterdayStr) return 'Hôm qua';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  container.innerHTML = daysWithPump.map(day => {
+    const rows = day.bom.map(e => {
+      // Phân biệt tự động/thủ công/tắt
+      const isAuto = e.action.toLowerCase().includes('tự động');
+      const isOff  = e.action.toLowerCase().includes('tắt') || e.action.toLowerCase().includes('ngắt');
+      
+      let badgeClass = 'manual';
+      let badgeText  = 'Thủ công';
+      let iconClass  = 'manual';
+      let iconName   = 'droplet';
+
+      if (isAuto) {
+        badgeClass = 'auto';
+        badgeText  = 'Tự động';
+        iconClass  = 'auto';
+        iconName   = 'cpu';
+      } else if (isOff) {
+        badgeClass = 'off';
+        badgeText  = 'Tắt';
+        iconClass  = 'off';
+        iconName   = 'power';
+      }
+
+      return `
+        <div class="pump-history-item">
+          <div class="pump-history-item-left">
+            <div class="pump-item-icon ${iconClass}"><i data-lucide="${iconName}"></i></div>
+            <div class="pump-history-info">
+              <span class="pump-history-action">${e.action}</span>
+              <span class="pump-history-time">${e.time}</span>
+            </div>
+          </div>
+          <span class="pump-history-badge ${badgeClass}">${badgeText}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="pump-history-day">
+        <div class="pump-day-title">${dayLabel(day.date)}</div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+}
+

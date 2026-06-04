@@ -1,6 +1,11 @@
 import './style.css';
 import { loginHTML, appHTML } from './templates.js';
-import { goTo, startSensorSim, toggleDark, bindSlider, showToast, setWaterValue, updateFirebaseControl, updateFirebaseSetting } from './app.js';
+import {
+  goTo, startSensorSim, toggleDark, bindSlider, showToast,
+  setWaterValue, updateFirebaseControl, updateFirebaseSetting,
+  decreaseTankWater, WATER_PER_MANUAL_PCT, addActivityLog,
+  openPumpHistoryModal
+} from './app.js';
 
 /* ── Render shell ── */
 const root = document.getElementById('app');
@@ -13,6 +18,18 @@ const login = document.getElementById('page-login');
 shell.style.display = 'none';
 const initialNav = document.querySelector('.bottom-nav');
 if (initialNav) initialNav.style.display = 'none';
+
+/* ── Ghi nhớ đăng nhập: điền sẵn nếu đã lưu ── */
+const rememberCb   = document.getElementById('remember');
+const emailInput   = document.getElementById('login-email');
+const passInput    = document.getElementById('login-pass');
+const savedUser    = localStorage.getItem('rememberedUsername');
+const savedPass    = localStorage.getItem('rememberedPassword');
+if (savedUser) {
+  emailInput.value  = savedUser;
+  passInput.value   = savedPass || '';
+  if (rememberCb) rememberCb.checked = true;
+}
 
 /* ── Navigation helper ── */
 function navigate(page) {
@@ -31,14 +48,18 @@ function navigate(page) {
 
 /* ── Login ── */
 const doLogin = async () => {
-  const username = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-pass').value.trim();
-  
+  const username = emailInput.value.trim();
+  const password = passInput.value.trim();
+
   if (!username || !password) {
     alert('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!');
     return;
   }
-  
+
+  const btnLogin = document.getElementById('btn-login');
+  btnLogin.disabled = true;
+  btnLogin.textContent = 'Đang đăng nhập...';
+
   try {
     const res = await fetch('http://localhost:5000/api/login', {
       method: 'POST',
@@ -47,20 +68,36 @@ const doLogin = async () => {
     });
     const data = await res.json();
     if (res.ok && data.success) {
+      // Ghi nhớ đăng nhập
+      if (rememberCb && rememberCb.checked) {
+        localStorage.setItem('rememberedUsername', username);
+        localStorage.setItem('rememberedPassword', password);
+      } else {
+        localStorage.removeItem('rememberedUsername');
+        localStorage.removeItem('rememberedPassword');
+      }
       navigate('dashboard');
       showToast('<i data-lucide="user-check" style="width:18px;height:18px"></i> Đăng nhập thành công!');
     } else {
       alert(data.error || 'Đăng nhập thất bại!');
+      btnLogin.disabled = false;
+      btnLogin.textContent = 'Đăng Nhập';
     }
   } catch (err) {
     console.error('Lỗi đăng nhập:', err);
     alert('Không thể kết nối tới Server Backend. Vui lòng kiểm tra xem Server đã chạy chưa!');
+    btnLogin.disabled = false;
+    btnLogin.textContent = 'Đăng Nhập';
   }
 };
 document.getElementById('btn-login').addEventListener('click', doLogin);
-document.getElementById('login-pass').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin();
-});
+passInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+/* ── Auto-login nếu đã ghi nhớ ── */
+if (savedUser && savedPass) {
+  setTimeout(doLogin, 400); // đợi DOM ổn định rồi tự đăng nhập
+}
+
 
 /* ── Logout ── */
 document.getElementById('btn-logout').addEventListener('click', () => navigate('login'));
@@ -85,21 +122,51 @@ document.getElementById('avatar-goto-settings').addEventListener('click', () => 
 document.getElementById('plant-add').addEventListener('click', () => navigate('settings'));
 document.getElementById('btn-sys-settings').addEventListener('click', () => navigate('settings'));
 
-/* ── Water button (Tưới xung 5 giây) ── */
+/* ── Lịch sử bơm modal ── */
+const btnPump = document.querySelector('.btn-pump');
+const modalPump = document.getElementById('modal-pump-history');
+const btnClosePumpModal = document.getElementById('btn-close-pump-modal');
+
+if (btnPump) {
+  btnPump.addEventListener('click', openPumpHistoryModal);
+}
+if (btnClosePumpModal) {
+  btnClosePumpModal.addEventListener('click', () => {
+    modalPump.classList.add('hidden');
+  });
+}
+if (modalPump) {
+  modalPump.addEventListener('click', (e) => {
+    if (e.target === modalPump) {
+      modalPump.classList.add('hidden');
+    }
+  });
+}
+
+
+/* ── Water button (Tưới tự động 5 giây) ── */
 document.getElementById('btn-water').addEventListener('click', () => {
+  const pumpManualSw = document.getElementById('control-pump-manual');
+  if (pumpManualSw) pumpManualSw.checked = true;
+
   updateFirebaseControl('pump_manual', true);
+  decreaseTankWater(); // −8%: 40ml / 500ml
+  addActivityLog('water_auto', 'Tưới nước tự động', 'Đã bơm ~40ml nước cho vườn (5 giây).');
   showToast('<i data-lucide="droplet" style="width:18px;height:18px"></i> Đã gửi lệnh tưới nước (5 giây)!');
+  
   setTimeout(() => {
+    if (pumpManualSw) pumpManualSw.checked = false;
     updateFirebaseControl('pump_manual', false);
+    addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã tắt sau khi tưới xong (5 giây).');
   }, 5000);
 });
 
 /* ── Emergency stop ── */
 document.getElementById('btn-emergency').addEventListener('click', () => {
   if (confirm('Bạn có chắc muốn dừng TOÀN BỘ hệ thống không?')) {
-    // Ngắt khẩn cấp bằng cách tắt cả bơm và đèn thủ công
     updateFirebaseControl('pump_manual', false);
     updateFirebaseControl('light_manual', false);
+    addActivityLog('emergency', 'Dừng khẩn cấp', 'Toàn bộ bơm & đèn đã bị ngắt khẩn cấp.');
     showToast('<i data-lucide="alert-octagon" style="width:18px;height:18px"></i> Hệ thống đã nhận lệnh tắt khẩn cấp!', 3500);
   }
 });
@@ -113,34 +180,29 @@ document.getElementById('dark-mode-toggle').addEventListener('change', e =>
 bindSlider('water-alert-slider', 'water-alert-label', '%');
 bindSlider('hum-min',   'hum-min-label',   '%');
 bindSlider('hum-max',   'hum-max-label',   '%');
-// Đồng bộ hai chiều giữa thanh kéo và ô nhập số của ngưỡng bật đèn
+
 const luxLowSlider = document.getElementById('lux-low');
-const luxLowInput = document.getElementById('lux-low-input');
+const luxLowInput  = document.getElementById('lux-low-input');
 if (luxLowSlider && luxLowInput) {
-  luxLowSlider.addEventListener('input', e => {
-    luxLowInput.value = e.target.value;
-  });
+  luxLowSlider.addEventListener('input', e => { luxLowInput.value = e.target.value; });
   luxLowSlider.addEventListener('change', e => {
     updateFirebaseSetting('lux_min', parseFloat(e.target.value));
   });
   luxLowInput.addEventListener('input', e => {
     let val = parseInt(e.target.value);
     if (isNaN(val)) val = 0;
-    if (val < 0) val = 0;
-    if (val > 2000) val = 2000;
+    val = Math.max(0, Math.min(2000, val));
     luxLowSlider.value = val;
   });
   luxLowInput.addEventListener('change', e => {
     let val = parseFloat(e.target.value);
     if (isNaN(val)) val = 0;
-    if (val < 0) val = 0;
-    if (val > 2000) val = 2000;
+    val = Math.max(0, Math.min(2000, val));
     luxLowInput.value = Math.round(val);
     updateFirebaseSetting('lux_min', val);
   });
 }
 
-// Gửi cấu hình độ ẩm đất lên Firebase khi người dùng kéo và thả chuột (sự kiện change)
 document.getElementById('hum-min').addEventListener('change', e => {
   const rawMin = Math.round(4095 - (e.target.value * 40.95));
   updateFirebaseSetting('soil_min', rawMin);
@@ -150,12 +212,24 @@ document.getElementById('hum-max').addEventListener('change', e => {
   updateFirebaseSetting('soil_max', rawMax);
 });
 
-// Lắng nghe sự kiện bật/tắt thủ công máy bơm/đèn từ Dashboard
+/* ── Điều khiển thủ công máy bơm / đèn ── */
 document.getElementById('control-pump-manual').addEventListener('change', e => {
   updateFirebaseControl('pump_manual', e.target.checked);
+  if (e.target.checked) {
+    decreaseTankWater(WATER_PER_MANUAL_PCT); // −24%: 120ml / 500ml
+    addActivityLog('water_manual', 'Bật máy bơm thủ công', 'Đã bơm ~120ml nước (10 giây).');
+  } else {
+    addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã được tắt thủ công.');
+  }
 });
+
 document.getElementById('control-light-manual').addEventListener('change', e => {
   updateFirebaseControl('light_manual', e.target.checked);
+  if (e.target.checked) {
+    addActivityLog('light_on', 'Bật đèn LED', 'Đèn LED đã được bật thủ công.');
+  } else {
+    addActivityLog('light_off', 'Tắt đèn LED', 'Đèn LED đã được tắt thủ công.');
+  }
 });
 
 /* ── IoT sync initiation ── */

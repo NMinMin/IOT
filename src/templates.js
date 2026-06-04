@@ -10,16 +10,14 @@ export const loginHTML = /* html */`
       <h2>Chào Mừng Trở Lại!</h2>
       <p>Vườn sen đá đang đợi bạn đấy <img src="./Vector.svg" class="icon-plant" alt="Plant"/></p>
       <div class="form-group">
-        <label for="login-email">Tên đăng nhập</label>
         <div class="input-wrap">
-          <input id="login-email" type="text" placeholder="nhacphuoc25" />
+          <input id="login-email" type="text" placeholder="Tên đăng nhập" />
           <span class="input-icon"><i data-lucide="user"></i></span>
         </div>
       </div>
       <div class="form-group">
-        <label for="login-pass">Mật khẩu</label>
         <div class="input-wrap">
-          <input id="login-pass" type="password" placeholder="••••••••" />
+          <input id="login-pass" type="password" placeholder="Mật khẩu" />
           <span class="input-icon"><i data-lucide="lock"></i></span>
         </div>
       </div>
@@ -53,8 +51,8 @@ export const appHTML = /* html */`
         <button class="nav-btn-desktop" data-goto="settings">Cài đặt</button>
       </nav>
       <div class="weather-badge" id="weather-badge">
-        <span><i data-lucide="cloud-sun"></i></span><span class="weather-temp">28°C</span>
-        <span class="sep">|</span><span>Đà Lạt, VN</span>
+        <span><i data-lucide="cloud-sun"></i></span><span class="weather-temp">32°C</span>
+        <span class="sep">|</span><span>Đồng Nai, VN</span>
       </div>
       <div class="tab-group hidden" id="stats-tabs">
         <button class="tab-btn active" data-tab="daily">Hàng Ngày</button>
@@ -110,19 +108,19 @@ export const appHTML = /* html */`
         <div class="wc-hdr">
           <div>
             <h3>Thời Tiết Hiện Tại</h3>
-            <p>Thành phố Đà Lạt</p>
+            <p>Tỉnh Đồng Nai</p>
           </div>
           <i data-lucide="cloud-sun"></i>
         </div>
-        <div class="wc-temp">24°<span>C</span></div>
+        <div class="wc-temp">32°<span>C</span></div>
         <div class="wc-details">
           <div class="wc-box"><span>ĐỘ ẨM</span><strong>65%</strong></div>
           <div class="wc-box"><span>UV INDEX</span><strong>Cực cao</strong></div>
         </div>
         <div class="wc-forecast">
           <div class="wc-f-title">Dự báo 3 ngày tới</div>
-          <div class="wc-row"><span>Ngày mai</span><i data-lucide="sun" style="width:16px;height:16px"></i><span>26° / 18°</span></div>
-          <div class="wc-row"><span>Thứ 4</span><i data-lucide="cloud-rain" style="width:16px;height:16px"></i><span>22° / 17°</span></div>
+          <div class="wc-row"><span>Ngày mai</span><i data-lucide="sun" style="width:16px;height:16px"></i><span>34° / 26°</span></div>
+          <div class="wc-row"><span>Thứ 4</span><i data-lucide="cloud-rain" style="width:16px;height:16px"></i><span>33° / 25°</span></div>
         </div>
       </div>
 
@@ -158,7 +156,7 @@ export const appHTML = /* html */`
               </div>
             </div>
             <div class="drop-info">
-              <div class="tank-note"><strong>LƯU Ý</strong> Cần thêm 45 Lít để đầy bể.</div>
+              <div class="tank-note"><strong>LƯU Ý</strong> Cần thêm 440 ml để đầy bể.</div>
               <button class="btn-pump">Lịch sử bơm</button>
             </div>
           </div>
@@ -193,7 +191,7 @@ export const appHTML = /* html */`
         <div class="card chart-main">
           <div class="chart-header">
             <h3>Biểu Đồ Sức Khỏe</h3>
-            <div class="tab-group">
+            <div class="tab-group" id="health-tabs">
               <button class="tab-btn active" data-chart="today">Hôm nay</button>
               <button class="tab-btn" data-chart="week">Tuần này</button>
             </div>
@@ -279,44 +277,9 @@ export const appHTML = /* html */`
             <h3 style="font-size:18px;font-weight:700">Nhật Ký Hoạt Động</h3>
             <i data-lucide="list" style="color:#A0ADA2"></i>
           </div>
-          
-          <div class="log-item">
-            <div class="log-icon blue"><i data-lucide="droplet" style="fill:var(--light-blue)"></i></div>
-            <div class="log-info">
-              <strong>Đã tưới nước</strong>
-              <span>Hệ thống đã tưới 200ml cho khu vực Sen Đá.</span>
-            </div>
-            <span class="log-time">10:30 AM</span>
+          <div id="activity-log-list">
+            <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>
           </div>
-          
-          <div class="log-item">
-            <div class="log-icon yellow"><i data-lucide="sun" style="fill:var(--yellow)"></i></div>
-            <div class="log-info">
-              <strong>Ánh sáng cực đại</strong>
-              <span>Cường độ sáng vượt 15,000 Lux. Đã kéo lưới che.</span>
-            </div>
-            <span class="log-time">12:15 PM</span>
-          </div>
-          
-          <div class="log-item">
-            <div class="log-icon red"><i data-lucide="alert-triangle" style="fill:var(--red-alert)"></i></div>
-            <div class="log-info">
-              <strong>Cảnh báo nước</strong>
-              <span>Mực nước bể chứa xuống dưới 15%.</span>
-            </div>
-            <span class="log-time">Hôm qua</span>
-          </div>
-          
-          <div class="log-item">
-            <div class="log-icon green"><img src="./Vector.svg" class="icon-plant" alt="Plant"/></div>
-            <div class="log-info">
-              <strong>Thêm cây mới</strong>
-              <span>Sen Đá Phật Bà đã được thêm vào hệ thống.</span>
-            </div>
-            <span class="log-time">3 ngày trước</span>
-          </div>
-          
-          <button class="btn-view-log">Xem Tất Cả Nhật Ký</button>
         </div>
 
         <div class="card export-card">
@@ -495,4 +458,17 @@ export const appHTML = /* html */`
     </button>
   </nav>
 <div id="toast" class="toast hidden"><i data-lucide="droplet" style="width:18px;height:18px"></i> Đã gửi lệnh tưới nước!</div>
+
+  <!-- Modal Lịch Sử Bơm -->
+  <div id="modal-pump-history" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="droplet" style="color:var(--light-blue); fill:var(--light-blue); width:20px; height:20px;"></i> Lịch Sử Máy Bơm</h3>
+        <button class="btn-close-modal" id="btn-close-pump-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="pump-history-content">
+        <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Đang tải dữ liệu...</p>
+      </div>
+    </div>
+  </div>
 `;
