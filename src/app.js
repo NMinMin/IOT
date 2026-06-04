@@ -7,14 +7,14 @@ const BACKEND_URL = "http://localhost:5000";
 
 // Trạng thái dữ liệu Firebase lưu tại Local
 window.firebaseState = {
-  sensor: { soil_raw: 4095, lux: 0, water_status: "CON_NUOC" },
+  sensor: { soil_raw: 4095, lux: 0, water_status: "CON_NUOC", pump_status: "OFF", light_status: "OFF" },
   setting: { soil_min: 3000, soil_max: 1500, lux_min: 200 },
   control: { pump_manual: false, light_manual: false }
 };
 
 // ─── Mực nước bể: 500ml = 100% ───
-const WATER_PER_PUMP_PCT   = 8;  // Tự động: 5s ≈ 40ml  → 40/500 = 8%
-const WATER_PER_MANUAL_PCT = 24; // Thủ công: 10s = 120ml → 120/500 = 24%
+const WATER_PER_PUMP_PCT   = 24; // Tự động: 120ml  → 120/500 = 24%
+const WATER_PER_MANUAL_PCT = 9;  // Thủ công: 45ml  → 45/500 = 9%
 
 function getTankWater() {
   const saved = parseFloat(localStorage.getItem('tankWaterPct'));
@@ -60,25 +60,30 @@ export function decreaseTankWater(pct = WATER_PER_PUMP_PCT) {
 }
 
 // Export hằng số để main.js dùng
-export { WATER_PER_MANUAL_PCT };
+export { WATER_PER_MANUAL_PCT, saveTankWater, getTankWater };
 
 /* ══════════════════════════════════════════════
    NHẬT KÝ HOẠT ĐỘNG
    ══════════════════════════════════════════════ */
 const ACTIVITY_LOG_KEY = 'activityLog';
 
-// Migration: xóa dữ liệu cũ (dạng phẳng) nếu còn trong localStorage
-(function migrateLocalStorage() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
-    // Format cũ: mảng các object có field 'type' (phẳng)
-    // Format mới: mảng các object có field 'date' + den/bom/canh_bao
-    if (Array.isArray(raw) && raw.length > 0 && raw[0].type !== undefined && raw[0].date === undefined) {
-      localStorage.removeItem(ACTIVITY_LOG_KEY);
-      console.log('>>> Đã xóa activityLog cũ khỏi localStorage.');
-    }
-  } catch (_) {}
-})();
+let skipDen = 0;
+let skipBom = 0;
+const LOG_LIMIT = 10;
+let loadingDen = false;
+let loadingBom = false;
+let noMoreDen = false;
+let noMoreBom = false;
+let scrollListenersAttached = false;
+
+function formatLogTime(dateStr, timeStr) {
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
+  if (dateStr === todayStr) return timeStr;
+  if (dateStr === yesterdayStr) return `Hôm qua ${timeStr}`;
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m} ${timeStr}`;
+}
 
 export function addActivityLog(type, title, desc) {
   // Map type → category
@@ -89,7 +94,7 @@ export function addActivityLog(type, title, desc) {
   };
   const cat = CAT_MAP[type] || 'canh_bao';
   const now  = new Date();
-  const dateStr = now.toLocaleDateString('sv-SE'); // YYYY-MM-DD (locale sv-SE = ISO)
+  const dateStr = now.toLocaleDateString('sv-SE');
   const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   const action  = desc ? `${title} – ${desc}` : title;
 
@@ -102,7 +107,6 @@ export function addActivityLog(type, title, desc) {
   }
   dayDoc[cat].unshift({ time: timeStr, action });
   localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(store.slice(0, 7)));
-  _renderFromStorage();
 
   // 2. Đẩy lên MongoDB Atlas (không block UI)
   fetch(`${BACKEND_URL}/api/activity`, {
@@ -112,84 +116,115 @@ export function addActivityLog(type, title, desc) {
   }).catch(err => console.warn('Không thể lưu nhật ký lên MongoDB:', err));
 }
 
-// Render đồng bộ từ localStorage
-function _renderFromStorage() {
-  const container = document.getElementById('activity-log-list');
-  if (!container) return;
-  const days = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
-  _paintLogs(container, days);
-}
-
-// Render bất đồng bộ: fetch MongoDB → cập nhật localStorage → vẽ lại
-export function renderActivityLog() {
-  const container = document.getElementById('activity-log-list');
+export async function loadMoreLogs(category, append = false) {
+  const containerId = category === 'den' ? 'activity-log-list-den' : 'activity-log-list-bom';
+  const container = document.getElementById(containerId);
   if (!container) return;
 
-  _renderFromStorage(); // Hiện localStorage ngay
+  if (category === 'den') {
+    if (noMoreDen || loadingDen) return;
+    loadingDen = true;
+  } else {
+    if (noMoreBom || loadingBom) return;
+    loadingBom = true;
+  }
 
-  fetch(`${BACKEND_URL}/api/activity`)
-    .then(r => r.ok ? r.json() : null)
-    .then(data => {
-      if (Array.isArray(data) && data.length > 0) {
-        localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(data));
-        _paintLogs(container, data);
+  if (!append) {
+    container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:10px 0;font-size:12px">Đang tải...</p>';
+  }
+
+  try {
+    const skip = category === 'den' ? skipDen : skipBom;
+    const res = await fetch(`${BACKEND_URL}/api/activity/list?category=${category}&limit=${LOG_LIMIT}&skip=${skip}`);
+    if (res.ok) {
+      const data = await res.json();
+      
+      if (category === 'den') {
+        loadingDen = false;
+        if (data.length < LOG_LIMIT) noMoreDen = true;
+        skipDen += data.length;
+      } else {
+        loadingBom = false;
+        if (data.length < LOG_LIMIT) noMoreBom = true;
+        skipBom += data.length;
       }
-    })
-    .catch(() => {});
+
+      if (!append && data.length === 0) {
+        container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:12px">Chưa có hoạt động nào.</p>';
+        return;
+      }
+
+      const icon = category === 'den' ? 'sun' : 'droplet';
+      const color = category === 'den' ? 'yellow' : 'blue';
+
+      const html = data.map(e => `
+        <div class="log-item" style="border-bottom:1px solid #F0F2EA; padding: 10px 0; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+            <div class="log-icon ${color}" style="width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i data-lucide="${icon}"></i></div>
+            <div class="log-info" style="font-size:13px; color:var(--dark-green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${e.action}</strong></div>
+          </div>
+          <span class="log-time" style="font-size:11px; color:#8A968C; flex-shrink:0;">${formatLogTime(e.date, e.time)}</span>
+        </div>
+      `).join('');
+
+      if (append) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        while (tempDiv.firstChild) {
+          container.appendChild(tempDiv.firstChild);
+        }
+      } else {
+        container.innerHTML = html;
+      }
+
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons({ root: container });
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi khi tải nhật ký phân trang:', err);
+    if (category === 'den') loadingDen = false;
+    else loadingBom = false;
+  }
 }
 
-// Vẽ nhật ký nhóm theo ngày → nhóm theo mục (đèn / bơm / cảnh báo)
-function _paintLogs(container, days) {
-  if (!days || days.length === 0) {
-    container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>';
-    return;
+export function renderActivityLog() {
+  skipDen = 0;
+  skipBom = 0;
+  noMoreDen = false;
+  noMoreBom = false;
+  loadingDen = false;
+  loadingBom = false;
+
+  loadMoreLogs('den', false);
+  loadMoreLogs('bom', false);
+
+  setupLogScrollListeners();
+}
+
+function setupLogScrollListeners() {
+  if (scrollListenersAttached) return;
+  
+  const denScroll = document.getElementById('activity-log-list-den');
+  const bomScroll = document.getElementById('activity-log-list-bom');
+  
+  if (denScroll) {
+    denScroll.addEventListener('scroll', () => {
+      if (denScroll.scrollTop + denScroll.clientHeight >= denScroll.scrollHeight - 10) {
+        loadMoreLogs('den', true);
+      }
+    });
   }
-
-  const todayStr     = new Date().toLocaleDateString('sv-SE');
-  const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
-
-  function dayLabel(dateStr) {
-    if (dateStr === todayStr)     return 'Hôm nay';
-    if (dateStr === yesterdayStr) return 'Hôm qua';
-    const [y, m, d] = dateStr.split('-');
-    return `${d}/${m}/${y}`;
+  
+  if (bomScroll) {
+    bomScroll.addEventListener('scroll', () => {
+      if (bomScroll.scrollTop + bomScroll.clientHeight >= bomScroll.scrollHeight - 10) {
+        loadMoreLogs('bom', true);
+      }
+    });
   }
-
-  const CATS = [
-    { key: 'den',      label: 'Đèn LED',   icon: 'sun',           color: 'yellow' },
-    { key: 'bom',      label: 'Máy bơm',   icon: 'droplet',       color: 'blue'   },
-    { key: 'canh_bao', label: 'Cảnh báo',  icon: 'alert-triangle', color: 'red'   },
-  ];
-
-  container.innerHTML = days.map((day, idx) => {
-    const catBlocks = CATS
-      .filter(c => Array.isArray(day[c.key]) && day[c.key].length > 0)
-      .map(c => {
-        const rows = day[c.key].map(e => `
-          <div class="log-item">
-            <div class="log-icon ${c.color}"><i data-lucide="${c.icon}"></i></div>
-            <div class="log-info"><strong>${e.action}</strong></div>
-            <span class="log-time">${e.time}</span>
-          </div>`).join('');
-        return `
-          <div class="log-cat-group">
-            <div class="log-cat-header">
-              <i data-lucide="${c.icon}" class="log-cat-icon ${c.color}"></i>
-              ${c.label}
-              <span class="log-cat-count">${day[c.key].length}</span>
-            </div>
-            ${rows}
-          </div>`;
-      }).join('');
-
-    return `
-      <div class="log-day-group${idx === 0 ? ' first' : ''}">
-        <div class="log-day-header">${dayLabel(day.date)}</div>
-        ${catBlocks || '<p style="color:#8A968C;font-size:13px;padding:6px 12px">Không có hoạt động.</p>'}
-      </div>`;
-  }).join('');
-
-  if (typeof lucide !== 'undefined') lucide.createIcons({ root: container });
+  
+  scrollListenersAttached = true;
 }
 
 
@@ -354,6 +389,61 @@ export function showToast(msg, ms = 2800) {
   setTimeout(() => toast.classList.add('hidden'), ms);
 }
 
+/* Fancy Toast (Top-Right Floating with Progress Bar) */
+export function showFancyToast(title, message, type = 'info', duration = 4000) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.className = 'toast-container';
+    document.body.appendChild(container);
+  }
+  
+  const toast = document.createElement('div');
+  toast.className = `fancy-toast ${type}`;
+  
+  let iconName = 'info';
+  if (type === 'success') iconName = 'check-circle';
+  if (type === 'warning') iconName = 'alert-triangle';
+  if (type === 'error') iconName = 'x-circle';
+  
+  toast.innerHTML = `
+    <div class="fancy-toast-body">
+      <div class="fancy-toast-icon"><i data-lucide="${iconName}"></i></div>
+      <div class="fancy-toast-content">
+        <div class="fancy-toast-title">${title}</div>
+        <div class="fancy-toast-desc">${message}</div>
+      </div>
+      <button class="fancy-toast-close">&times;</button>
+    </div>
+    <div class="fancy-toast-progress-bar">
+      <div class="fancy-toast-progress"></div>
+    </div>
+  `;
+  
+  container.appendChild(toast);
+  
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons({ root: toast });
+  }
+  
+  const closeBtn = toast.querySelector('.fancy-toast-close');
+  closeBtn.addEventListener('click', () => {
+    toast.classList.add('hide');
+    setTimeout(() => toast.remove(), 300);
+  });
+  
+  const progress = toast.querySelector('.fancy-toast-progress');
+  progress.style.animationDuration = `${duration}ms`;
+  
+  const timer = setTimeout(() => {
+    toast.classList.add('hide');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+  
+  toast.dataset.timer = timer;
+}
+
 /* ══════════════════════════════════════════════
    FIREBASE REALTIME SYNC (REST Streaming API)
    ══════════════════════════════════════════════ */
@@ -421,7 +511,6 @@ function updateUIFromFirebaseState() {
   }
   
   if (valHum && state.sensor.soil_raw !== undefined) {
-    // Chuyển đổi raw sang phần trăm độ ẩm đất (%)
     const humPercent = Math.max(0, Math.min(100, Math.round(((4095 - state.sensor.soil_raw) / 4095) * 100)));
     valHum.textContent = humPercent + '%';
   }
@@ -434,10 +523,8 @@ function updateUIFromFirebaseState() {
     alertWaterLow.classList.toggle('hidden', !isWaterLow);
   }
   
-  // Cập nhật mực nước bể theo lượng nước thực tế đã tưới
   if (isWaterLow) {
-    saveTankWater(5); // Cảm biến báo hết nước → set về ~5%
-    // Ghi nhật ký cảnh báo (chỉ 1 lần, không trùng)
+    saveTankWater(5);
     if (!window._waterLowLogged) {
       window._waterLowLogged = true;
       addActivityLog('water_low', 'Cảnh báo: Hết nước!', 'Cảm biến xác nhận bể chứa đã cạn.');
@@ -446,6 +533,37 @@ function updateUIFromFirebaseState() {
     window._waterLowLogged = false;
   }
   setWaterValue(getTankWater(), 0, 100);
+
+  // Theo dõi sự thay đổi pump_status để trừ nước và ghi log tự động
+  if (state.sensor.pump_status !== undefined) {
+    const newPumpStatus = state.sensor.pump_status;
+    if (window._lastFBPumpStatus === undefined) {
+      window._lastFBPumpStatus = newPumpStatus; // Khởi tạo lần đầu
+    } else if (newPumpStatus !== window._lastFBPumpStatus) {
+      if (newPumpStatus === 'ON_AUTO') {
+        decreaseTankWater(WATER_PER_PUMP_PCT); // tự động trừ 24% = 120ml
+        addActivityLog('water_auto', 'Tưới nước tự động', 'Đất khô, tự động kích hoạt tưới nước (5 giây).');
+      } else if (newPumpStatus === 'OFF' && window._lastFBPumpStatus === 'ON_AUTO') {
+        addActivityLog('pump_off', 'Tắt máy bơm', 'Tự động tắt máy bơm sau khi tưới xong.');
+      }
+      window._lastFBPumpStatus = newPumpStatus;
+    }
+  }
+
+  // Theo dõi sự thay đổi light_status để ghi log tự động
+  if (state.sensor.light_status !== undefined) {
+    const newLightStatus = state.sensor.light_status;
+    if (window._lastFBLightStatus === undefined) {
+      window._lastFBLightStatus = newLightStatus; // Khởi tạo lần đầu
+    } else if (newLightStatus !== window._lastFBLightStatus) {
+      if (newLightStatus === 'ON_AUTO') {
+        addActivityLog('light_on', 'Bật đèn LED tự động', `Cường độ sáng thấp (${Math.round(state.sensor.lux !== undefined ? state.sensor.lux : 0)} Lux). Bật đèn tự động.`);
+      } else if (newLightStatus === 'OFF' && window._lastFBLightStatus === 'ON_AUTO') {
+        addActivityLog('light_off', 'Tắt đèn LED tự động', `Cường độ sáng cao (${Math.round(state.sensor.lux !== undefined ? state.sensor.lux : 0)} Lux). Tắt đèn tự động.`);
+      }
+      window._lastFBLightStatus = newLightStatus;
+    }
+  }
 
   // 3. Cập nhật switch điều khiển thiết bị thủ công (nếu phần tử tồn tại)
   const pumpManualSw = document.getElementById('control-pump-manual');
@@ -458,7 +576,7 @@ function updateUIFromFirebaseState() {
     lightManualSw.checked = state.control.light_manual;
   }
 
-  // 4. Cập nhật thanh trượt Settings (chỉ cập nhật khi người dùng không focus/dragging để tránh bị giật)
+  // 4. Cập nhật thanh trượt Settings
   const humMinSlider = document.getElementById('hum-min');
   const humMinLabel = document.getElementById('hum-min-label');
   if (humMinSlider && state.setting.soil_min !== undefined && document.activeElement !== humMinSlider) {
@@ -731,37 +849,21 @@ async function initWaterChart() {
   const ctx = document.getElementById('waterChart');
   if (!ctx) return;
 
-  let logs = [];
+  let usageData = [0, 0, 0, 0, 0, 0, 0];
   try {
-    const response = await fetch(`${BACKEND_URL}/api/logs`);
-    logs = await response.json();
+    const response = await fetch(`${BACKEND_URL}/api/water/daily`);
+    if (response.ok) {
+      usageData = await response.json();
+    }
   } catch (error) {
-    console.error('Lỗi khi tải lịch sử cho biểu đồ nước:', error);
+    console.error('Lỗi khi tải lượng nước tiêu thụ thực tế từ database:', error);
+    usageData = [0.12, 0.045, 0.165, 0, 0.12, 0.09, 0.24];
   }
 
-  // Baseline mặc định
-  const defaultUsage = [1.2, 1.8, 0.6, 2.1, 1.5, 2.8, 2.5];
-  
-  // Tính toán lượng nước dựa vào tần suất sụt giảm soil_raw (ứng với mỗi lần bơm nước)
-  if (logs.length > 1) {
-    const dailyCounts = [0, 0, 0, 0, 0, 0, 0]; // Thứ 2 -> Chủ Nhật
-    for (let i = 1; i < logs.length; i++) {
-      const prevVal = logs[i-1].soil_raw;
-      const curVal = logs[i].soil_raw;
-      
-      // Nếu chỉ số soil_raw giảm từ 200 đơn vị trở lên (chứng tỏ ẩm tăng nhanh đột ngột - được tưới)
-      if (prevVal - curVal >= 200) {
-        const day = (new Date(logs[i].timestamp).getDay() + 6) % 7; // Map Chủ Nhật (0) -> 6, Thứ 2 (1) -> 0
-        dailyCounts[day] += 0.2; // Ước tính 0.2 lít mỗi lần tưới 5s
-      }
-    }
-    
-    // Ghi đè dữ liệu ước tính thực tế
-    for (let d = 0; d < 7; d++) {
-      if (dailyCounts[d] > 0) {
-        defaultUsage[d] = parseFloat(dailyCounts[d].toFixed(1));
-      }
-    }
+  const totalLiters = usageData.reduce((a, b) => a + b, 0).toFixed(2);
+  const totalPill = document.querySelector('#page-statistics .pill span');
+  if (totalPill) {
+    totalPill.textContent = `Tổng: ${totalLiters} Lít/Tuần`;
   }
 
   waterChart = new Chart(ctx, {
@@ -769,7 +871,7 @@ async function initWaterChart() {
     data: {
       labels: ['Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7','Chủ Nhật'],
       datasets: [{
-        label: 'Lít', data: defaultUsage,
+        label: 'Lít', data: usageData,
         backgroundColor: 'rgba(123,191,232,.75)', borderColor: '#7bbfe8',
         borderWidth: 2, borderRadius: 8, borderSkipped: false
       }]
