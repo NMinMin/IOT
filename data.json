@@ -1,0 +1,16 @@
+{
+  "sensor": {
+    "soil_raw": 4095,
+    "lux": 120,
+    "water_status": "CON_NUOC"
+  },
+  "setting": {
+    "soil_min": 3000,
+    "soil_max": 1500,
+    "lux_min": 200
+  },
+  "control": {
+    "pump_manual": false,
+    "light_manual": false
+  }
+}
