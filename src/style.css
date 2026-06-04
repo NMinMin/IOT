@@ -591,7 +591,7 @@ input {
 }
 
 .btn-water {
-  background: var(--dark-green);
+  background: var(--light-blue);
   color: var(--white);
   padding: 12px 24px;
   border-radius: var(--radius-pill);
@@ -600,6 +600,11 @@ input {
   align-items: center;
   gap: 8px;
   border: 2px solid var(--dark-green);
+  transition: opacity 0.2s;
+}
+
+.btn-water:hover {
+  opacity: 0.9;
 }
 
 /* Weather Card */
@@ -2419,5 +2424,254 @@ body.dark .pump-history-action {
 body.dark .pump-day-title {
   border-bottom-color: #3C4740;
 }
+
+/* ══════════════════════════════════════════════
+   FANCY TOAST & DUAL-COLUMN ACTIVITY LOGS
+   ══════════════════════════════════════════════ */
+
+/* Toast Container */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+  width: calc(100% - 48px);
+}
+
+/* Fancy Toast Item */
+.fancy-toast {
+  background: var(--white);
+  border: var(--border-thick);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 35px rgba(74, 91, 76, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: all 0.3s ease;
+}
+
+.fancy-toast.hide {
+  animation: slideOutRight 0.3s ease forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(120%);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+.fancy-toast-body {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  gap: 12px;
+  position: relative;
+}
+
+.fancy-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Toast Color Schemes */
+.fancy-toast.info .fancy-toast-icon {
+  background: #EAF5FC;
+  color: var(--light-blue);
+}
+.fancy-toast.success .fancy-toast-icon {
+  background: #EAF0E6;
+  color: var(--primary-green);
+}
+.fancy-toast.warning .fancy-toast-icon {
+  background: #FFF4D9;
+  color: #FAAD14;
+}
+.fancy-toast.error .fancy-toast-icon {
+  background: #FFEBEA;
+  color: var(--red-alert);
+}
+
+.fancy-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.fancy-toast-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--dark-green);
+  margin-bottom: 4px;
+}
+
+.fancy-toast-desc {
+  font-size: 12px;
+  color: #8A968C;
+  line-height: 1.4;
+}
+
+.fancy-toast-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #A0ADA2;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  align-self: flex-start;
+  margin-top: -4px;
+}
+
+.fancy-toast-close:hover {
+  color: var(--dark-green);
+}
+
+.fancy-toast-progress-bar {
+  height: 4px;
+  background: #F0F2EA;
+  width: 100%;
+}
+
+.fancy-toast-progress {
+  height: 100%;
+  background: var(--primary-green);
+  width: 100%;
+  animation: shrinkProgress linear forwards;
+}
+
+.fancy-toast.info .fancy-toast-progress {
+  background: var(--light-blue);
+}
+.fancy-toast.warning .fancy-toast-progress {
+  background: #FAAD14;
+}
+.fancy-toast.error .fancy-toast-progress {
+  background: var(--red-alert);
+}
+
+@keyframes shrinkProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Vertical Log Layout */
+.log-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.log-col-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1.5px solid #E2E4D9;
+  border-radius: var(--radius-md);
+  background: #FDFDFB;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.log-col-header {
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid #F0F2EA;
+}
+
+.log-list-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Custom scrollbar for log boxes */
+.log-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.log-list-scroll::-webkit-scrollbar-track {
+  background: #F0F2EA;
+  border-radius: 3px;
+}
+
+.log-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--primary-green);
+  border-radius: 3px;
+}
+
+.log-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-green);
+}
+
+/* Dark mode compatibility */
+body.dark .log-col-box {
+  background: #252A26;
+  border-color: #3C4740;
+}
+
+body.dark .log-col-header {
+  border-bottom-color: #3C4740;
+}
+
+body.dark .log-list-scroll::-webkit-scrollbar-track {
+  background: #2B312D;
+}
+
+body.dark .log-list-scroll::-webkit-scrollbar-thumb {
+  background: #3C4740;
+}
+
+body.dark .fancy-toast {
+  background: #252A26;
+  border-color: #3C4740;
+}
+
+body.dark .fancy-toast-title {
+  color: #E2E4D9;
+}
+
+body.dark .fancy-toast-desc {
+  color: #8A968C;
+}
+
+body.dark .fancy-toast-progress-bar {
+  background: #2B312D;
+}
+
 
 

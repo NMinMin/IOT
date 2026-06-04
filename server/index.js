@@ -71,11 +71,20 @@ const sensorLogSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   soil_raw: Number,
   lux: Number,
-  water_status: String
+  water_status: String,
+  pump_status: String,
+  light_status: String
 });
 
 // Tạo Model kết nối tới database 'smart_green_house' và collection 'sensor_logs'
 const SensorLog = mongoose.model('SensorLog', sensorLogSchema, 'sensor_logs');
+
+// Định nghĩa Schema cho Lượng nước tiêu thụ hàng ngày (Daily Water)
+const dailyWaterSchema = new mongoose.Schema({
+  date:      { type: String, required: true, unique: true }, // YYYY-MM-DD
+  amount_ml: { type: Number, default: 0 }
+});
+const DailyWater = mongoose.model('DailyWater', dailyWaterSchema, 'daily_water');
 
 // API: Lấy lịch sử dữ liệu cảm biến (giới hạn 100 bản ghi mới nhất)
 app.get('/api/logs', async (req, res) => {
@@ -205,12 +214,41 @@ app.post('/api/activity', async (req, res) => {
   const action  = desc ? `${title} – ${desc}` : title;
 
   try {
+    // Tránh ghi trùng log nếu nhiều client/tab gửi cùng lúc
+    const existing = await ActivityLog.findOne({ date: dateStr });
+    let isDuplicate = false;
+    if (existing && existing[cat]) {
+      isDuplicate = existing[cat].some(e => e.action === action && e.time === timeStr);
+    }
+
+    if (isDuplicate) {
+      return res.json({ success: true, message: 'Nhật ký trùng lặp, bỏ qua.' });
+    }
+
     await ActivityLog.findOneAndUpdate(
       { date: dateStr },
       { $push: { [cat]: { time: timeStr, action } } },
       { upsert: true, new: true }
     );
     console.log(`>>> Nhật ký [${dateStr}][${cat}] ${timeStr}: ${action}`);
+
+    // Cộng dồn lượng nước tiêu hao vào cơ sở dữ liệu khi có sự kiện tưới nước
+    let waterAdd = 0;
+    if (type === 'water_auto') {
+      waterAdd = 120; // Auto: 120ml
+    } else if (type === 'water_manual') {
+      waterAdd = 45;  // Thủ công: 45ml
+    }
+
+    if (waterAdd > 0) {
+      await DailyWater.findOneAndUpdate(
+        { date: dateStr },
+        { $inc: { amount_ml: waterAdd } },
+        { upsert: true, new: true }
+      );
+      console.log(`>>> [Water Accumulated via API] +${waterAdd}ml cho ngày ${dateStr}`);
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Lỗi POST /api/activity:', error);
@@ -229,6 +267,96 @@ app.get('/api/activity', async (req, res) => {
   }
 });
 
+// GET /api/activity/list – lấy nhật ký phân trang theo mục (den / bom / canh_bao)
+app.get('/api/activity/list', async (req, res) => {
+  const { category, limit = 10, skip = 0 } = req.query;
+  const lim = parseInt(limit);
+  const skp = parseInt(skip);
+  
+  if (!['den', 'bom', 'canh_bao'].includes(category)) {
+    return res.status(400).json({ error: 'Category không hợp lệ.' });
+  }
+  
+  try {
+    const days = await ActivityLog.find().sort({ date: -1 });
+    let allEntries = [];
+    
+    for (const day of days) {
+      const entries = day[category] || [];
+      const reversed = [...entries].reverse().map(e => ({
+        date: day.date,
+        time: e.time,
+        action: e.action
+      }));
+      allEntries.push(...reversed);
+    }
+    
+    const paginated = allEntries.slice(skp, skp + lim);
+    res.json(paginated);
+  } catch (error) {
+    console.error('Lỗi GET /api/activity/list:', error);
+    res.status(500).json({ error: 'Không thể lấy danh sách nhật ký.' });
+  }
+});
+
+// GET /api/water/daily – lấy lượng nước tiêu thụ của tuần này (Thứ 2 đến Chủ Nhật)
+app.get('/api/water/daily', async (req, res) => {
+  try {
+    const now = new Date();
+    const vnDate = new Date(now.getTime() + 7 * 3600000);
+    const currentDay = vnDate.getDay();
+    const diff = vnDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
+    const monday = new Date(vnDate.setDate(diff));
+    
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      weekDates.push(d.toISOString().slice(0, 10));
+    }
+    
+    const records = await DailyWater.find({ date: { $in: weekDates } });
+    const recordMap = {};
+    records.forEach(r => {
+      recordMap[r.date] = r.amount_ml;
+    });
+    
+    const result = weekDates.map(dateStr => {
+      const ml = recordMap[dateStr] || 0;
+      return parseFloat((ml / 1000).toFixed(3)); // Lít
+    });
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Lỗi GET /api/water/daily:', error);
+    res.status(500).json({ error: 'Không thể lấy dữ liệu lượng nước.' });
+  }
+});
+
+// Lưu trạng thái trước đó để phát hiện thay đổi
+let lastSyncPump = null;
+let lastSyncLight = null;
+
+async function saveActivityLogBackend(type, title, desc) {
+  const cat = TYPE_TO_CAT[type] || 'canh_bao';
+  const now  = new Date();
+  const vnDate = new Date(now.getTime() + 7 * 3600000);
+  const dateStr = vnDate.toISOString().slice(0, 10);
+  const timeStr = vnDate.toISOString().slice(11, 16);
+  const action  = desc ? `${title} – ${desc}` : title;
+  
+  try {
+    await ActivityLog.findOneAndUpdate(
+      { date: dateStr },
+      { $push: { [cat]: { time: timeStr, action } } },
+      { upsert: true, new: true }
+    );
+    console.log(`>>> [Backend Auto Log] [${dateStr}][${cat}] ${timeStr}: ${action}`);
+  } catch (error) {
+    console.error('Lỗi khi ghi log tự động từ backend:', error);
+  }
+}
+
 // Logic chạy ngầm: Tự động lấy dữ liệu từ Firebase và ghi vào MongoDB Atlas
 async function syncFirebaseToMongo() {
   try {
@@ -246,17 +374,74 @@ async function syncFirebaseToMongo() {
     const data = await response.json();
     
     if (data) {
-      const { soil_raw, lux, water_status } = data;
-      
+      const { soil_raw, lux, water_status, pump_status, light_status } = data;
+      const currentPump = pump_status || 'OFF';
+      const currentLight = light_status || 'OFF';
+      const currentWater = water_status || 'UNKNOWN';
+
+      // Khôi phục trạng thái cũ từ DB nếu server mới restart
+      if (lastSyncPump === null || lastSyncLight === null) {
+        const lastLog = await SensorLog.findOne().sort({ timestamp: -1 });
+        if (lastLog) {
+          lastSyncPump = lastLog.pump_status || 'OFF';
+          lastSyncLight = lastLog.light_status || 'OFF';
+        } else {
+          lastSyncPump = 'OFF';
+          lastSyncLight = 'OFF';
+        }
+      }
+
+      // Phát hiện và ghi nhận sự kiện hoạt động
+      // 1. Máy bơm
+      if (currentPump !== lastSyncPump) {
+        let waterAdd = 0;
+        
+        if (currentPump === 'ON_AUTO') {
+          await saveActivityLogBackend('water_auto', 'Tưới nước tự động', 'Đất khô, tự động kích hoạt tưới nước (5 giây).');
+          waterAdd = 120; // 120ml
+        } else if (currentPump === 'ON_MANUAL') {
+          waterAdd = 45; // 45ml
+        } else if (currentPump === 'OFF' && lastSyncPump === 'ON_AUTO') {
+          await saveActivityLogBackend('pump_off', 'Tắt máy bơm', 'Tự động tắt máy bơm sau khi tưới xong (5 giây).');
+        }
+        
+        if (waterAdd > 0) {
+          const now = new Date();
+          const vnDate = new Date(now.getTime() + 7 * 3600000);
+          const dateStr = vnDate.toISOString().slice(0, 10);
+          
+          await DailyWater.findOneAndUpdate(
+            { date: dateStr },
+            { $inc: { amount_ml: waterAdd } },
+            { upsert: true, new: true }
+          );
+          console.log(`>>> [Daily Water] +${waterAdd}ml cho ngày ${dateStr}`);
+        }
+        
+        lastSyncPump = currentPump;
+      }
+
+      // 2. Đèn LED
+      if (currentLight !== lastSyncLight) {
+        if (currentLight === 'ON_AUTO') {
+          await saveActivityLogBackend('light_on', 'Bật đèn LED tự động', `Cường độ sáng thấp (${Math.round(lux !== undefined ? lux : 0)} Lux). Bật đèn tự động.`);
+        } else if (currentLight === 'OFF' && lastSyncLight === 'ON_AUTO') {
+          await saveActivityLogBackend('light_off', 'Tắt đèn LED tự động', `Cường độ sáng cao (${Math.round(lux !== undefined ? lux : 0)} Lux). Tắt đèn tự động.`);
+        }
+        lastSyncLight = currentLight;
+      }
+
       // Tạo bản ghi log mới
       const newLog = new SensorLog({
         soil_raw: soil_raw !== undefined ? soil_raw : 4095,
         lux: lux !== undefined ? lux : 0,
-        water_status: water_status || 'UNKNOWN'
+        water_status: currentWater,
+        pump_status: currentPump,
+        light_status: currentLight
       });
       
       await newLog.save();
-      console.log(`[${new Date().toLocaleTimeString()}] Đồng bộ thành công: soil_raw=${soil_raw}, lux=${lux}, water=${water_status}`);
+      console.log(`[${new Date().toLocaleTimeString()}] Đồng bộ thành công: soil_raw=${soil_raw}, lux=${lux}, water=${currentWater}, pump=${currentPump}, light=${currentLight}`);
     } else {
       console.warn('[Sync Warning] Firebase không trả về dữ liệu tại node /sensor');
     }

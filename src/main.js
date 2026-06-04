@@ -4,7 +4,7 @@ import {
   goTo, startSensorSim, toggleDark, bindSlider, showToast,
   setWaterValue, updateFirebaseControl, updateFirebaseSetting,
   decreaseTankWater, WATER_PER_MANUAL_PCT, addActivityLog,
-  openPumpHistoryModal
+  openPumpHistoryModal, saveTankWater, getTankWater, showFancyToast
 } from './app.js';
 
 /* ── Render shell ── */
@@ -143,21 +143,38 @@ if (modalPump) {
   });
 }
 
+/* ── Refill Water button click handler ── */
+document.getElementById('btn-refill-water').addEventListener('click', () => {
+  saveTankWater(100);
+  setWaterValue(100, 0, 100);
+  addActivityLog('water_manual', 'Châm nước thủ công', 'Đã châm đầy bể nước (100%).');
+  
+  const alertWaterLow = document.getElementById('alert-water-low');
+  if (alertWaterLow) alertWaterLow.classList.add('hidden');
+  
+  showFancyToast('Thành công', 'Đã châm đầy bể nước 100%!', 'success');
+});
 
-/* ── Water button (Tưới tự động 5 giây) ── */
+/* ── Water button (Tưới thủ công 5 giây) ── */
 document.getElementById('btn-water').addEventListener('click', () => {
+  const isWaterLow = window.firebaseState.sensor.water_status === 'HET_NUOC' || getTankWater() < 5;
+  if (isWaterLow) {
+    showFancyToast('Lỗi vận hành', 'Không thể tưới nước khi bể chứa cạn. Vui lòng thêm nước!', 'error', 4500);
+    return;
+  }
+
   const pumpManualSw = document.getElementById('control-pump-manual');
   if (pumpManualSw) pumpManualSw.checked = true;
 
   updateFirebaseControl('pump_manual', true);
-  decreaseTankWater(); // −8%: 40ml / 500ml
-  addActivityLog('water_auto', 'Tưới nước tự động', 'Đã bơm ~40ml nước cho vườn (5 giây).');
-  showToast('<i data-lucide="droplet" style="width:18px;height:18px"></i> Đã gửi lệnh tưới nước (5 giây)!');
+  decreaseTankWater(WATER_PER_MANUAL_PCT); // -9%: 45ml / 500ml
+  addActivityLog('water_manual', 'Tưới nước thủ công', 'Đã bơm ~45ml nước cho vườn (5 giây).');
+  showFancyToast('Máy bơm đang hoạt động', 'Hệ thống đang tưới nước thủ công (5 giây)...', 'success', 5000);
   
   setTimeout(() => {
     if (pumpManualSw) pumpManualSw.checked = false;
     updateFirebaseControl('pump_manual', false);
-    addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã tắt sau khi tưới xong (5 giây).');
+    addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã tắt sau khi tưới xong.');
   }, 5000);
 });
 
@@ -213,15 +230,18 @@ document.getElementById('hum-max').addEventListener('change', e => {
 });
 
 /* ── Điều khiển thủ công máy bơm / đèn ── */
-document.getElementById('control-pump-manual').addEventListener('change', e => {
-  updateFirebaseControl('pump_manual', e.target.checked);
-  if (e.target.checked) {
-    decreaseTankWater(WATER_PER_MANUAL_PCT); // −24%: 120ml / 500ml
-    addActivityLog('water_manual', 'Bật máy bơm thủ công', 'Đã bơm ~120ml nước (10 giây).');
-  } else {
-    addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã được tắt thủ công.');
-  }
-});
+const pumpManualSw = document.getElementById('control-pump-manual');
+if (pumpManualSw) {
+  pumpManualSw.addEventListener('change', e => {
+    updateFirebaseControl('pump_manual', e.target.checked);
+    if (e.target.checked) {
+      decreaseTankWater(WATER_PER_MANUAL_PCT);
+      addActivityLog('water_manual', 'Bật máy bơm thủ công', 'Đã bơm ~45ml nước.');
+    } else {
+      addActivityLog('pump_off', 'Tắt máy bơm', 'Máy bơm đã được tắt.');
+    }
+  });
+}
 
 document.getElementById('control-light-manual').addEventListener('change', e => {
   updateFirebaseControl('light_manual', e.target.checked);

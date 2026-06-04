@@ -54,11 +54,6 @@ export const appHTML = /* html */`
         <span><i data-lucide="cloud-sun"></i></span><span class="weather-temp">32°C</span>
         <span class="sep">|</span><span>Đồng Nai, VN</span>
       </div>
-      <div class="tab-group hidden" id="stats-tabs">
-        <button class="tab-btn active" data-tab="daily">Hàng Ngày</button>
-        <button class="tab-btn" data-tab="weekly">Hàng Tuần</button>
-        <button class="tab-btn" data-tab="monthly">Hàng Tháng</button>
-      </div>
       <div class="avatar-wrap" id="avatar-goto-settings">
         <img src="./doc.jpg" alt="Avatar" class="avatar" />
         <span class="notif-badge">2</span>
@@ -157,7 +152,10 @@ export const appHTML = /* html */`
             </div>
             <div class="drop-info">
               <div class="tank-note"><strong>LƯU Ý</strong> Cần thêm 440 ml để đầy bể.</div>
-              <button class="btn-pump">Lịch sử bơm</button>
+              <div style="display:flex; gap:8px; width:100%; margin-top:8px;">
+                <button class="btn-pump" style="flex:1;">Lịch sử bơm</button>
+                <button id="btn-refill-water" class="btn-refill" style="flex:1; padding: 6px 8px; border-radius: var(--radius-pill); background: #EAF5FC; border: 1.5px solid var(--light-blue); font-weight: 600; color: var(--dark-green); font-size: 13px; display:flex; align-items:center; justify-content:center; gap:4px;"><i data-lucide="plus-circle" style="width:14px; height:14px; color:var(--light-blue);"></i> Thêm nước</button>
+              </div>
             </div>
           </div>
 
@@ -166,10 +164,6 @@ export const appHTML = /* html */`
             <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px">
               <i data-lucide="sliders" style="width:18px;height:18px;color:var(--primary-green)"></i> Điều Khiển
             </h3>
-            <div class="toggle-list-item" style="padding: 10px 0;">
-              <div><strong style="font-size:14px;">Máy bơm</strong><span style="font-size:11px;color:#8A968C">Bật thủ công</span></div>
-              <label class="switch"><input type="checkbox" id="control-pump-manual" /><span class="slider"></span></label>
-            </div>
             <div class="toggle-list-item" style="padding: 10px 0; border:none;">
               <div><strong style="font-size:14px;">Đèn LED</strong><span style="font-size:11px;color:#8A968C">Bật thủ công</span></div>
               <label class="switch"><input type="checkbox" id="control-light-manual" /><span class="slider"></span></label>
@@ -277,8 +271,19 @@ export const appHTML = /* html */`
             <h3 style="font-size:18px;font-weight:700">Nhật Ký Hoạt Động</h3>
             <i data-lucide="list" style="color:#A0ADA2"></i>
           </div>
-          <div id="activity-log-list">
-            <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>
+          <div class="log-columns">
+            <div class="log-col-box">
+              <div class="log-col-header"><i data-lucide="sun" class="log-cat-icon yellow" style="color:var(--yellow)"></i> Đèn LED</div>
+              <div id="activity-log-list-den" class="log-list-scroll">
+                <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:13px">Chưa có hoạt động nào.</p>
+              </div>
+            </div>
+            <div class="log-col-box">
+              <div class="log-col-header"><i data-lucide="droplet" class="log-cat-icon blue" style="color:var(--light-blue)"></i> Máy bơm</div>
+              <div id="activity-log-list-bom" class="log-list-scroll">
+                <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:13px">Chưa có hoạt động nào.</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -458,6 +463,7 @@ export const appHTML = /* html */`
     </button>
   </nav>
 <div id="toast" class="toast hidden"><i data-lucide="droplet" style="width:18px;height:18px"></i> Đã gửi lệnh tưới nước!</div>
+<div id="toast-container" class="toast-container"></div>
 
   <!-- Modal Lịch Sử Bơm -->
   <div id="modal-pump-history" class="modal-overlay hidden">
