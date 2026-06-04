@@ -1,5 +1,17 @@
 import Chart from 'chart.js/auto';
 
+// Cấu hình kết nối Firebase và Backend Local
+const FIREBASE_DB_URL = "https://smart-green-house-iot-default-rtdb.asia-southeast1.firebasedatabase.app/";
+const FIREBASE_SECRET = "1Gi5Y2PkpsymHPnnBAQAXHY8e6AyWf4OdqFwheer";
+const BACKEND_URL = "http://localhost:5000";
+
+// Trạng thái dữ liệu Firebase lưu tại Local
+window.firebaseState = {
+  sensor: { soil_raw: 4095, lux: 0, water_status: "CON_NUOC" },
+  setting: { soil_min: 3000, soil_max: 1500, lux_min: 200 },
+  control: { pump_manual: false, light_manual: false }
+};
+
 let currentPage = 'dashboard';
 let prevPage    = null;
 let healthChart = null;
@@ -33,7 +45,8 @@ export function goTo(page) {
   // Animate tank
   if (page === 'dashboard') {
     setTimeout(() => {
-      setWaterValue(window.currentWater !== undefined ? window.currentWater : 12, 0, 100);
+      const isWaterLow = window.firebaseState.sensor.water_status === 'HET_NUOC';
+      setWaterValue(isWaterLow ? 12 : 92, 0, 100);
     }, 300);
   }
 
@@ -80,7 +93,7 @@ function updateNavBar(page) {
   });
 }
 
-/* ── Sensor simulation ── */
+/* ── Sensor / Water tank update ── */
 export function setWaterValue(val, min = 0, max = 100) {
   window.currentWater = val;
   // Calculate percentage based on min and max
@@ -102,23 +115,9 @@ export function setWaterValue(val, min = 0, max = 100) {
   }
 }
 
+// Hàm khởi chạy đồng bộ với Firebase (thay thế cho trình giả lập)
 export function startSensorSim() {
-  window.currentWater = 12; // Initial value
-  setInterval(() => {
-    const lux = 12500 + Math.round((Math.random() - .5) * 500);
-    const hum = 42    + Math.round((Math.random() - .5) * 4);
-    
-    // Simulate water draining slowly randomly
-    // (Disabled as per user request)
-    // if (Math.random() > 0.7 && window.currentWater > 0) {
-    //   setWaterValue(window.currentWater - 1, 0, 100);
-    // }
-    
-    const lEl = document.getElementById('val-light');
-    const hEl = document.getElementById('val-hum');
-    if (lEl) lEl.textContent = lux.toLocaleString('vi-VN') + ' Lux';
-    if (hEl) hEl.textContent = hum + '%';
-  }, 5000);
+  initFirebaseSync();
 }
 
 /* ── Dark mode ── */
@@ -151,28 +150,204 @@ export function showToast(msg, ms = 2800) {
 }
 
 /* ══════════════════════════════════════════════
-   CHART: Health Dashboard
-══════════════════════════════════════════════ */
-function initHealthChart() {
+   FIREBASE REALTIME SYNC (REST Streaming API)
+   ══════════════════════════════════════════════ */
+export function initFirebaseSync() {
+  const dbUrl = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL : `${FIREBASE_DB_URL}/`;
+  const streamUrl = `${dbUrl}.json?auth=${FIREBASE_SECRET}`;
+  
+  console.log('>>> Bắt đầu kết nối EventSource tới Firebase:', FIREBASE_DB_URL);
+  const eventSource = new EventSource(streamUrl);
+  
+  eventSource.addEventListener('put', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      if (payload) {
+        handleFirebaseUpdate(payload.path, payload.data);
+      }
+    } catch (error) {
+      console.error('Lỗi parse Firebase stream (put):', error);
+    }
+  });
+
+  eventSource.addEventListener('patch', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      if (payload) {
+        handleFirebaseUpdate(payload.path, payload.data);
+      }
+    } catch (error) {
+      console.error('Lỗi parse Firebase stream (patch):', error);
+    }
+  });
+
+  eventSource.onerror = (err) => {
+    console.error('Lỗi kết nối Firebase Stream. Đang tự động kết nối lại...', err);
+  };
+}
+
+function handleFirebaseUpdate(path, data) {
+  if (!path || data === null) return;
+  
+  const segments = path.split('/').filter(Boolean);
+  
+  if (segments.length === 0) {
+    window.firebaseState = { ...window.firebaseState, ...data };
+  } else if (segments.length === 1) {
+    window.firebaseState[segments[0]] = { ...window.firebaseState[segments[0]], ...data };
+  } else if (segments.length === 2) {
+    if (!window.firebaseState[segments[0]]) window.firebaseState[segments[0]] = {};
+    window.firebaseState[segments[0]][segments[1]] = data;
+  }
+
+  updateUIFromFirebaseState();
+}
+
+function updateUIFromFirebaseState() {
+  const state = window.firebaseState;
+  if (!state) return;
+
+  // 1. Cập nhật các thông số cảm biến trên Dashboard
+  const valLight = document.getElementById('val-light');
+  const valHum = document.getElementById('val-hum');
+  
+  if (valLight && state.sensor.lux !== undefined) {
+    valLight.textContent = Math.round(state.sensor.lux).toLocaleString('vi-VN') + ' Lux';
+  }
+  
+  if (valHum && state.sensor.soil_raw !== undefined) {
+    // Chuyển đổi raw sang phần trăm độ ẩm đất (%)
+    const humPercent = Math.max(0, Math.min(100, Math.round(((4095 - state.sensor.soil_raw) / 4095) * 100)));
+    valHum.textContent = humPercent + '%';
+  }
+
+  // 2. Cập nhật trạng thái nước và cảnh báo
+  const alertWaterLow = document.getElementById('alert-water-low');
+  const isWaterLow = state.sensor.water_status === 'HET_NUOC';
+  
+  if (alertWaterLow) {
+    alertWaterLow.classList.toggle('hidden', !isWaterLow);
+  }
+  
+  // Cập nhật mực nước trên bình chứa hình giọt nước
+  const pct = isWaterLow ? 12 : 92;
+  setWaterValue(pct, 0, 100);
+
+  // 3. Cập nhật switch điều khiển thiết bị thủ công (nếu phần tử tồn tại)
+  const pumpManualSw = document.getElementById('control-pump-manual');
+  const lightManualSw = document.getElementById('control-light-manual');
+  
+  if (pumpManualSw && state.control.pump_manual !== undefined) {
+    pumpManualSw.checked = state.control.pump_manual;
+  }
+  if (lightManualSw && state.control.light_manual !== undefined) {
+    lightManualSw.checked = state.control.light_manual;
+  }
+
+  // 4. Cập nhật thanh trượt Settings (chỉ cập nhật khi người dùng không focus/dragging để tránh bị giật)
+  const humMinSlider = document.getElementById('hum-min');
+  const humMinLabel = document.getElementById('hum-min-label');
+  if (humMinSlider && state.setting.soil_min !== undefined && document.activeElement !== humMinSlider) {
+    const minPercent = Math.max(0, Math.min(100, Math.round(((4095 - state.setting.soil_min) / 4095) * 100)));
+    humMinSlider.value = minPercent;
+    if (humMinLabel) humMinLabel.textContent = minPercent + '%';
+  }
+
+  const humMaxSlider = document.getElementById('hum-max');
+  const humMaxLabel = document.getElementById('hum-max-label');
+  if (humMaxSlider && state.setting.soil_max !== undefined && document.activeElement !== humMaxSlider) {
+    const maxPercent = Math.max(0, Math.min(100, Math.round(((4095 - state.setting.soil_max) / 4095) * 100)));
+    humMaxSlider.value = maxPercent;
+    if (humMaxLabel) humMaxLabel.textContent = maxPercent + '%';
+  }
+
+  const luxLowSlider = document.getElementById('lux-low');
+  const luxLowInput = document.getElementById('lux-low-input');
+  if (luxLowSlider && state.setting.lux_min !== undefined && document.activeElement !== luxLowSlider) {
+    luxLowSlider.value = state.setting.lux_min;
+    if (luxLowInput && document.activeElement !== luxLowInput) {
+      luxLowInput.value = Math.round(state.setting.lux_min);
+    }
+  }
+}
+
+// Gửi lệnh điều khiển thủ công lên Firebase
+export function updateFirebaseControl(key, value) {
+  const dbUrl = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL : `${FIREBASE_DB_URL}/`;
+  const url = `${dbUrl}control.json?auth=${FIREBASE_SECRET}`;
+  fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [key]: value })
+  }).then(() => {
+    console.log(`>>> Đã lưu điều khiển ${key} = ${value} lên Firebase.`);
+  }).catch(err => console.error('Lỗi khi ghi điều khiển lên Firebase:', err));
+}
+
+// Gửi cấu hình ngưỡng lên Firebase
+export function updateFirebaseSetting(key, value) {
+  const dbUrl = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL : `${FIREBASE_DB_URL}/`;
+  const url = `${dbUrl}setting.json?auth=${FIREBASE_SECRET}`;
+  fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [key]: value })
+  }).then(() => {
+    console.log(`>>> Đã lưu cấu hình ${key} = ${value} lên Firebase.`);
+  }).catch(err => console.error('Lỗi khi ghi cài đặt lên Firebase:', err));
+}
+
+/* ══════════════════════════════════════════════
+   CHART: Health Dashboard (Vẽ từ MongoDB Atlas Logs)
+   ══════════════════════════════════════════════ */
+async function initHealthChart() {
   if (healthChart) return;
   const ctx = document.getElementById('healthChart');
   if (!ctx) return;
 
+  let logs = [];
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/logs`);
+    logs = await response.json();
+  } catch (error) {
+    console.error('Lỗi khi tải lịch sử cho biểu đồ Dashboard:', error);
+  }
+
+  // Dữ liệu fallback nếu MongoDB chưa có dữ liệu
+  if (logs.length === 0) {
+    logs = [
+      { timestamp: new Date(Date.now() - 3600000 * 6), soil_raw: 2457, lux: 3000 },
+      { timestamp: new Date(Date.now() - 3600000 * 5), soil_raw: 2400, lux: 5500 },
+      { timestamp: new Date(Date.now() - 3600000 * 4), soil_raw: 2300, lux: 6800 },
+      { timestamp: new Date(Date.now() - 3600000 * 3), soil_raw: 2200, lux: 8200 },
+      { timestamp: new Date(Date.now() - 3600000 * 2), soil_raw: 2500, lux: 8800 },
+      { timestamp: new Date(Date.now() - 3600000 * 1), soil_raw: 2600, lux: 7600 },
+      { timestamp: new Date(), soil_raw: 2700, lux: 4200 }
+    ];
+  }
+
+  // Lấy tối đa 10 bản ghi mới nhất để hiển thị trực quan
+  const recentLogs = logs.slice(-10);
+
+  const labels = recentLogs.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+  const lightData = recentLogs.map(log => Math.round(log.lux));
+  const humData = recentLogs.map(log => Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
+
   healthChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: ['06:00','08:00','10:00','12:00','14:00','16:00','18:00'],
+      labels: labels,
       datasets: [
         {
-          label: 'Ánh Sáng',
-          data: [42,55,68,82,88,76,42],
+          label: 'Ánh Sáng (Lux)',
+          data: lightData,
           borderColor: '#f5c842', backgroundColor: 'rgba(245,200,66,.12)',
           borderWidth: 2.5, tension: .45, fill: false,
           pointBackgroundColor: '#f5c842', pointRadius: 4, pointHoverRadius: 7,
         },
         {
-          label: 'Độ Ẩm Đất',
-          data: [45,44,43,42,41,40,40],
+          label: 'Độ Ẩm Đất (%)',
+          data: humData,
           borderColor: '#5a8a65', backgroundColor: 'rgba(90,138,101,.12)',
           borderWidth: 2.5, tension: .45, fill: false,
           pointBackgroundColor: '#5a8a65', pointRadius: 4, pointHoverRadius: 7,
@@ -182,51 +357,72 @@ function initHealthChart() {
     options: chartOpts({ legend: true })
   });
 
-  // Tab mini buttons
+  // Gắn sự kiện tab thu nhỏ
   document.querySelectorAll('.tab-mini-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-mini-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const t = btn.dataset.chart;
-      const labels = t === 'today'
-        ? ['06:00','08:00','10:00','12:00','14:00','16:00','18:00']
-        : ['T2','T3','T4','T5','T6','T7','CN'];
-      healthChart.data.labels           = labels;
-      healthChart.data.datasets[0].data = t === 'today' ? [42,55,68,82,88,76,42] : [58,65,70,55,80,88,62];
-      healthChart.data.datasets[1].data = t === 'today' ? [45,44,43,42,41,40,40] : [50,48,52,46,44,42,45];
+      const isToday = t === 'today';
+      
+      const filtered = isToday ? logs.slice(-10) : logs.slice(-24); // Show more logs for weekly/long
+      healthChart.data.labels = filtered.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+      healthChart.data.datasets[0].data = filtered.map(log => Math.round(log.lux));
+      healthChart.data.datasets[1].data = filtered.map(log => Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
       healthChart.update('active');
     });
   });
 }
 
 /* ══════════════════════════════════════════════
-   CHART: Statistics Light/Hum
-══════════════════════════════════════════════ */
-function initStatChart() {
+   CHART: Statistics Light/Hum (Từ MongoDB)
+   ══════════════════════════════════════════════ */
+async function initStatChart() {
   if (statChart) return;
   const ctx = document.getElementById('statChart');
   if (!ctx) return;
 
-  const DATA = {
-    daily:   { labels: ['00:00','04:00','08:00','12:00','16:00','20:00','23:59'], light: [0,1200,8500,14000,10000,3000,0],       hum: [60,58,55,52,50,54,58] },
-    weekly:  { labels: ['T2','T3','T4','T5','T6','T7','CN'],                      light: [10500,12000,8000,13500,14200,11000,9500], hum: [52,48,60,46,44,50,55] },
-    monthly: { labels: ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'], light: [8000,9500,11000,13000,14000,14200,13500,13000,12000,10500,9000,8000], hum: [55,58,52,48,44,42,43,45,50,54,58,60] },
-  };
+  let logs = [];
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/logs`);
+    logs = await response.json();
+  } catch (error) {
+    console.error('Lỗi khi tải lịch sử cho biểu đồ lớn:', error);
+  }
+
+  if (logs.length === 0) {
+    logs = [
+      { timestamp: new Date(Date.now() - 3600000 * 6), soil_raw: 2457, lux: 1000 },
+      { timestamp: new Date(Date.now() - 3600000 * 5), soil_raw: 2400, lux: 3000 },
+      { timestamp: new Date(Date.now() - 3600000 * 4), soil_raw: 2300, lux: 8500 },
+      { timestamp: new Date(Date.now() - 3600000 * 3), soil_raw: 2200, lux: 14000 },
+      { timestamp: new Date(Date.now() - 3600000 * 2), soil_raw: 2500, lux: 10000 },
+      { timestamp: new Date(Date.now() - 3600000 * 1), soil_raw: 2600, lux: 3000 },
+      { timestamp: new Date(), soil_raw: 2700, lux: 120 }
+    ];
+  }
+
+  // Hiển thị 20 bản ghi lịch sử mới nhất
+  const displayLogs = logs.slice(-20);
+
+  const labels = displayLogs.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+  const lightData = displayLogs.map(log => Math.round(log.lux));
+  const humData = displayLogs.map(log => Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
 
   statChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: DATA.daily.labels,
+      labels: labels,
       datasets: [
         {
-          label: 'Ánh sáng (Lux)', data: DATA.daily.light,
+          label: 'Ánh sáng (Lux)', data: lightData,
           borderColor: '#f5c842', backgroundColor: 'rgba(245,200,66,.15)',
           borderWidth: 2.5, tension: .45, fill: true,
           pointBackgroundColor: '#f5c842', pointRadius: 4, pointHoverRadius: 7,
           yAxisID: 'yL'
         },
         {
-          label: 'Độ ẩm (%)', data: DATA.daily.hum,
+          label: 'Độ ẩm (%)', data: humData,
           borderColor: '#5a8a65', backgroundColor: 'rgba(90,138,101,.1)',
           borderWidth: 2.5, tension: .45, fill: false,
           pointBackgroundColor: '#5a8a65', pointRadius: 4, pointHoverRadius: 7,
@@ -249,34 +445,73 @@ function initStatChart() {
     }
   });
 
-  // Stats tabs
+  // Hỗ trợ click lọc khoảng thời gian
   document.querySelectorAll('#stats-tabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#stats-tabs .tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const d = DATA[btn.dataset.tab] || DATA.daily;
-      statChart.data.labels           = d.labels;
-      statChart.data.datasets[0].data = d.light;
-      statChart.data.datasets[1].data = d.hum;
+      const tab = btn.dataset.tab;
+      
+      let count = 10;
+      if (tab === 'weekly') count = 30;
+      if (tab === 'monthly') count = 80;
+      
+      const filtered = logs.slice(-count);
+      statChart.data.labels = filtered.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+      statChart.data.datasets[0].data = filtered.map(log => Math.round(log.lux));
+      statChart.data.datasets[1].data = filtered.map(log => Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100))));
       statChart.update('active');
     });
   });
 }
 
 /* ══════════════════════════════════════════════
-   CHART: Water Consumption Bar
-══════════════════════════════════════════════ */
-function initWaterChart() {
+   CHART: Water Consumption Bar (Dữ liệu thực tế ước tính)
+   ══════════════════════════════════════════════ */
+async function initWaterChart() {
   if (waterChart) return;
   const ctx = document.getElementById('waterChart');
   if (!ctx) return;
+
+  let logs = [];
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/logs`);
+    logs = await response.json();
+  } catch (error) {
+    console.error('Lỗi khi tải lịch sử cho biểu đồ nước:', error);
+  }
+
+  // Baseline mặc định
+  const defaultUsage = [1.2, 1.8, 0.6, 2.1, 1.5, 2.8, 2.5];
+  
+  // Tính toán lượng nước dựa vào tần suất sụt giảm soil_raw (ứng với mỗi lần bơm nước)
+  if (logs.length > 1) {
+    const dailyCounts = [0, 0, 0, 0, 0, 0, 0]; // Thứ 2 -> Chủ Nhật
+    for (let i = 1; i < logs.length; i++) {
+      const prevVal = logs[i-1].soil_raw;
+      const curVal = logs[i].soil_raw;
+      
+      // Nếu chỉ số soil_raw giảm từ 200 đơn vị trở lên (chứng tỏ ẩm tăng nhanh đột ngột - được tưới)
+      if (prevVal - curVal >= 200) {
+        const day = (new Date(logs[i].timestamp).getDay() + 6) % 7; // Map Chủ Nhật (0) -> 6, Thứ 2 (1) -> 0
+        dailyCounts[day] += 0.2; // Ước tính 0.2 lít mỗi lần tưới 5s
+      }
+    }
+    
+    // Ghi đè dữ liệu ước tính thực tế
+    for (let d = 0; d < 7; d++) {
+      if (dailyCounts[d] > 0) {
+        defaultUsage[d] = parseFloat(dailyCounts[d].toFixed(1));
+      }
+    }
+  }
 
   waterChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: ['Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7','Chủ Nhật'],
       datasets: [{
-        label: 'Lít', data: [1.2,1.8,.6,2.1,1.5,2.8,2.5],
+        label: 'Lít', data: defaultUsage,
         backgroundColor: 'rgba(123,191,232,.75)', borderColor: '#7bbfe8',
         borderWidth: 2, borderRadius: 8, borderSkipped: false
       }]

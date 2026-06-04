@@ -10,9 +10,9 @@ export const loginHTML = /* html */`
       <h2>Chào Mừng Trở Lại!</h2>
       <p>Vườn sen đá đang đợi bạn đấy <img src="./Vector.svg" class="icon-plant" alt="Plant"/></p>
       <div class="form-group">
-        <label for="login-email">Email hoặc Tên đăng nhập</label>
+        <label for="login-email">Tên đăng nhập</label>
         <div class="input-wrap">
-          <input id="login-email" type="text" placeholder="vidu@gmail.com" />
+          <input id="login-email" type="text" placeholder="nhacphuoc25" />
           <span class="input-icon"><i data-lucide="user"></i></span>
         </div>
       </div>
@@ -93,7 +93,7 @@ export const appHTML = /* html */`
             </div>
           </div>
           <div class="hero-bottom">
-            <div class="alert-pill">
+            <div class="alert-pill" id="alert-water-low">
               <i data-lucide="alert-triangle" class="icon" style="width:20px;height:20px"></i>
               <div>
                 <strong>Cảnh báo: Mực nước thấp!</strong>
@@ -160,6 +160,21 @@ export const appHTML = /* html */`
             <div class="drop-info">
               <div class="tank-note"><strong>LƯU Ý</strong> Cần thêm 45 Lít để đầy bể.</div>
               <button class="btn-pump">Lịch sử bơm</button>
+            </div>
+          </div>
+
+          <!-- Device Control -->
+          <div class="card control-card">
+            <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+              <i data-lucide="sliders" style="width:18px;height:18px;color:var(--primary-green)"></i> Điều Khiển
+            </h3>
+            <div class="toggle-list-item" style="padding: 10px 0;">
+              <div><strong style="font-size:14px;">Máy bơm</strong><span style="font-size:11px;color:#8A968C">Bật thủ công</span></div>
+              <label class="switch"><input type="checkbox" id="control-pump-manual" /><span class="slider"></span></label>
+            </div>
+            <div class="toggle-list-item" style="padding: 10px 0; border:none;">
+              <div><strong style="font-size:14px;">Đèn LED</strong><span style="font-size:11px;color:#8A968C">Bật thủ công</span></div>
+              <label class="switch"><input type="checkbox" id="control-light-manual" /><span class="slider"></span></label>
             </div>
           </div>
 
@@ -235,44 +250,7 @@ export const appHTML = /* html */`
             </div>
           </div>
           <div class="chart-wrap" style="height:300px; margin-top: 24px;">
-            <svg viewBox="0 0 600 300" style="width:100%;height:100%">
-              <!-- Grid lines -->
-              <path d="M40 250 L560 250 M40 210 L560 210 M40 170 L560 170 M40 130 L560 130 M40 90 L560 90 M40 50 L560 50" stroke="#F0F2E9" stroke-width="1.5" fill="none"/>
-              <!-- Y axis left -->
-              <text x="30" y="254" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">0</text>
-              <text x="30" y="214" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">2k</text>
-              <text x="30" y="174" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">4k</text>
-              <text x="30" y="134" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">6k</text>
-              <text x="30" y="94" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">8k</text>
-              <text x="30" y="54" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">10k</text>
-              <!-- Y axis right -->
-              <text x="570" y="254" font-size="11" fill="#A0ADA2" font-weight="500">0</text>
-              <text x="570" y="214" font-size="11" fill="#A0ADA2" font-weight="500">20</text>
-              <text x="570" y="174" font-size="11" fill="#A0ADA2" font-weight="500">40</text>
-              <text x="570" y="134" font-size="11" fill="#A0ADA2" font-weight="500">60</text>
-              <text x="570" y="94" font-size="11" fill="#A0ADA2" font-weight="500">80</text>
-              <text x="570" y="54" font-size="11" fill="#A0ADA2" font-weight="500">100</text>
-              <!-- X axis -->
-              <text x="50" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">00:00</text>
-              <text x="130" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">04:00</text>
-              <text x="210" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">08:00</text>
-              <text x="290" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">12:00</text>
-              <text x="370" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">16:00</text>
-              <text x="450" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">20:00</text>
-              <text x="530" y="270" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">23:59</text>
-              <!-- Yellow Curve -->
-              <path d="M50 250 C100 250 150 220 210 100 C250 20 330 20 370 100 C430 220 480 250 530 250" stroke="#FFD166" stroke-width="4.5" fill="none" stroke-linecap="round"/>
-              <!-- Green Line -->
-              <path d="M50 160 L130 165 L210 175 L290 195 L370 205 L450 185 L530 170" stroke="#88AB75" stroke-width="3.5" fill="none" stroke-linejoin="round"/>
-              <!-- Dots -->
-              <circle cx="50" cy="160" r="5" fill="#88AB75"/>
-              <circle cx="130" cy="165" r="5" fill="#88AB75"/>
-              <circle cx="210" cy="175" r="5" fill="#88AB75"/>
-              <circle cx="290" cy="195" r="5" fill="#88AB75"/>
-              <circle cx="370" cy="205" r="5" fill="#88AB75"/>
-              <circle cx="450" cy="185" r="5" fill="#88AB75"/>
-              <circle cx="530" cy="170" r="5" fill="#88AB75"/>
-            </svg>
+            <canvas id="statChart"></canvas>
           </div>
         </div>
 
@@ -282,32 +260,7 @@ export const appHTML = /* html */`
             <div class="pill" style="padding:8px 16px;border:none;background:#EAF5FC"><i data-lucide="droplet" style="color:var(--light-blue);width:14px;height:14px;fill:var(--light-blue)"></i> <span style="color:var(--light-blue);font-weight:700">Tổng: 12.5 Lít/Tuần</span></div>
           </div>
           <div class="chart-wrap" style="flex: 1; min-height: 200px; margin-top:24px;">
-            <svg viewBox="0 0 600 200" style="width:100%;height:100%" preserveAspectRatio="none">
-              <!-- Grid -->
-              <path d="M40 170 L560 170 M40 120 L560 120 M40 70 L560 70 M40 20 L560 20" stroke="#F0F2E9" stroke-width="1.5" fill="none"/>
-              <text x="30" y="174" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">0</text>
-              <text x="30" y="124" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">1</text>
-              <text x="30" y="74" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">2</text>
-              <text x="30" y="24" font-size="11" fill="#A0ADA2" font-weight="500" text-anchor="end">3</text>
-              <!-- Bars -->
-              <g fill="#8CE0F5" stroke="#4A5B4C" stroke-width="2.5">
-                <rect x="65" y="120" width="35" height="50"/>
-                <rect x="135" y="90" width="35" height="80"/>
-                <rect x="205" y="150" width="35" height="20"/>
-                <rect x="275" y="70" width="35" height="100"/>
-                <rect x="345" y="110" width="35" height="60"/>
-                <rect x="415" y="30" width="35" height="140"/>
-                <rect x="485" y="60" width="35" height="110"/>
-              </g>
-              <!-- X axis -->
-              <text x="82.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 2</text>
-              <text x="152.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 3</text>
-              <text x="222.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 4</text>
-              <text x="292.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 5</text>
-              <text x="362.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 6</text>
-              <text x="432.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Thứ 7</text>
-              <text x="502.5" y="190" font-size="11" fill="#4A5B4C" font-weight="700" text-anchor="middle">Chủ Nhật</text>
-            </svg>
+            <canvas id="waterChart"></canvas>
           </div>
         </div>
       </div>
@@ -477,40 +430,34 @@ export const appHTML = /* html */`
         </div>
 
         <div class="card env-card">
-          <h3><i data-lucide="sliders" style="width:20px;height:20px;color:var(--primary-green)"></i> Ngưỡng Môi Trường Lý Tưởng</h3>
-          <div class="env-grid">
-            <div class="env-box">
-              <h4><div class="icon green"><i data-lucide="droplet" style="width:16px;height:16px"></i></div> Độ ẩm đất (%)</h4>
-              <div class="slider-row">
-                <span style="flex:1">Tối thiểu</span>
-                <input type="range" min="0" max="100" value="40" id="hum-min" />
-                <span class="val" id="hum-min-label" style="color:var(--dark-green)">40%</span>
-              </div>
-              <div class="slider-row">
-                <span style="flex:1">Tối đa</span>
-                <input type="range" min="0" max="100" value="80" id="hum-max" />
-                <span class="val" id="hum-max-label" style="color:var(--dark-green)">80%</span>
-              </div>
-              <div class="toggle-row">
-                <span>Tự động tưới</span>
-                <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
-              </div>
+          <h3><i data-lucide="droplet" style="width:20px;height:20px;color:var(--primary-green)"></i> Ngưỡng Độ Ẩm Đất</h3>
+          <div style="margin-top: 20px;">
+            <div class="slider-row" style="margin-bottom: 16px;">
+              <span style="flex:1">Tối thiểu</span>
+              <input type="range" min="0" max="100" value="40" id="hum-min" />
+              <span class="val" id="hum-min-label" style="color:var(--dark-green)">40%</span>
             </div>
-            <div class="env-box">
-              <h4><div class="icon yellow"><i data-lucide="sun" style="width:16px;height:16px"></i></div> Ánh sáng (Lux)</h4>
-              <div class="slider-row">
-                <span style="flex:1">Ngưỡng che nắng</span>
-                <input type="range" min="0" max="20000" value="12000" id="lux-shade" />
-                <span class="val" id="lux-shade-label" style="color:var(--dark-green)">12,000 lx</span>
-              </div>
-              <div class="slider-row">
-                <span style="flex:1">Cảnh báo thiếu sáng</span>
-                <input type="range" min="0" max="20000" value="2000" id="lux-low" />
-                <span class="val" id="lux-low-label" style="color:var(--dark-green)">2,000 lx</span>
-              </div>
-              <div class="toggle-row">
-                <span>Tự động kéo rèm</span>
-                <label class="switch"><input type="checkbox" /><span class="slider"></span></label>
+            <div class="slider-row" style="margin-bottom: 16px;">
+              <span style="flex:1">Tối đa</span>
+              <input type="range" min="0" max="100" value="80" id="hum-max" />
+              <span class="val" id="hum-max-label" style="color:var(--dark-green)">80%</span>
+            </div>
+            <div class="toggle-row">
+              <span>Tự động tưới</span>
+              <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card env-card">
+          <h3><i data-lucide="sun" style="width:20px;height:20px;color:var(--yellow)"></i> Cài Đặt Ánh Sáng</h3>
+          <div style="margin-top: 20px;">
+            <div class="slider-row">
+              <span style="flex:1">Ngưỡng bật đèn</span>
+              <input type="range" min="0" max="2000" value="200" id="lux-low" style="flex: 2;" />
+              <div style="display:flex; align-items:center; gap:4px; margin-left: 8px;">
+                <input type="number" id="lux-low-input" style="width: 70px; border: 1.5px solid var(--dark-green); border-radius: 8px; padding: 4px 8px; text-align: right; color: var(--dark-green); font-weight: 600; font-family: inherit; font-size: 13px;" min="0" max="2000" value="200" />
+                <span style="font-size:13px; font-weight:600;">lx</span>
               </div>
             </div>
           </div>
