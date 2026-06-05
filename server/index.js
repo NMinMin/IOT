@@ -10,6 +10,12 @@ import * as XLSX from 'xlsx';
 // Thiết lập DNS của Google để sửa lỗi querySrv ECONNREFUSED khi kết nối MongoDB Atlas
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
+// Ép buộc ưu tiên IPv4 trước IPv6 để tránh lỗi ENETUNREACH khi gửi mail cảnh báo qua Gmail trên Render
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
+
 dotenv.config();
 
 const app = express();
