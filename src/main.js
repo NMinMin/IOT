@@ -262,6 +262,56 @@ if (emailToggle) {
   });
 }
 
+/* ── Low Water Alert Toggle ── */
+const waterAlertToggle = document.getElementById('water-alert-toggle');
+if (waterAlertToggle) {
+  waterAlertToggle.addEventListener('change', async (e) => {
+    const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
+    const waterAlertEnabled = e.target.checked;
+    
+    try {
+      const res = await fetch('http://localhost:5000/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUsername, waterAlertEnabled })
+      });
+      if (res.ok) {
+        showFancyToast(t('toast_refill_title'), waterAlertEnabled ? t('toast_email_alert_enabled') : t('toast_email_alert_disabled'), 'success', 2500);
+      } else {
+        showFancyToast(t('toast_error_title'), t('toast_save_alert_fail'), 'error', 3000);
+      }
+    } catch (err) {
+      console.error('Lỗi lưu cài đặt thông báo nước thấp:', err);
+      showFancyToast(t('toast_error_title'), t('toast_conn_error'), 'error', 3000);
+    }
+  });
+}
+
+/* ── Low Water Alert Threshold Slider Change ── */
+const waterAlertSliderElement = document.getElementById('water-alert-slider');
+if (waterAlertSliderElement) {
+  waterAlertSliderElement.addEventListener('change', async (e) => {
+    const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
+    const waterAlertThreshold = parseInt(e.target.value);
+    
+    try {
+      const res = await fetch('http://localhost:5000/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUsername, waterAlertThreshold })
+      });
+      if (res.ok) {
+        showFancyToast(t('toast_refill_title'), t('toast_profile_success'), 'success', 2500);
+      } else {
+        showFancyToast(t('toast_error_title'), t('toast_save_alert_fail'), 'error', 3000);
+      }
+    } catch (err) {
+      console.error('Lỗi lưu cài đặt ngưỡng cảnh báo nước:', err);
+      showFancyToast(t('toast_error_title'), t('toast_conn_error'), 'error', 3000);
+    }
+  });
+}
+
 /* ── Sliders ── */
 bindSlider('water-alert-slider', 'water-alert-label', '%');
 bindSlider('hum-min',   'hum-min-label',   '%');

@@ -623,7 +623,9 @@ function updateUIFromFirebaseState() {
   // 2. Cập nhật trạng thái nước và cảnh báo
   const alertWaterLow = document.getElementById('alert-water-low');
   const globalWaterAlert = document.getElementById('global-water-alert');
-  const isWaterLow = state.sensor.water_status === 'HET_NUOC' || getTankWater() < 5;
+  const waterAlertSlider = document.getElementById('water-alert-slider');
+  const threshold = waterAlertSlider ? parseInt(waterAlertSlider.value) : 15;
+  const isWaterLow = state.sensor.water_status === 'HET_NUOC' || getTankWater() < threshold;
   
   if (alertWaterLow) {
     alertWaterLow.classList.toggle('hidden', !isWaterLow);
@@ -1254,6 +1256,21 @@ export async function loadUserProfile(username) {
       const emailToggle = document.getElementById('email-notification-toggle');
       if (emailToggle) {
         emailToggle.checked = data.emailAlertEnabled !== false;
+      }
+
+      const waterAlertToggle = document.getElementById('water-alert-toggle');
+      if (waterAlertToggle) {
+        waterAlertToggle.checked = data.waterAlertEnabled !== false;
+      }
+
+      const waterAlertSlider = document.getElementById('water-alert-slider');
+      const waterAlertLabel = document.getElementById('water-alert-label');
+      if (waterAlertSlider) {
+        const threshold = data.waterAlertThreshold !== undefined ? data.waterAlertThreshold : 15;
+        waterAlertSlider.value = threshold;
+        if (waterAlertLabel) {
+          waterAlertLabel.textContent = threshold + '%';
+        }
       }
       
       return data;

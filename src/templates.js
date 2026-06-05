@@ -468,7 +468,7 @@ export const appHTML = /* html */`
             </div>
             <div class="alert-toggle-pill">
               <span style="display:flex;align-items:center;gap:8px"><i data-lucide="bell" style="width:16px;height:16px;color:var(--light-blue)"></i> ${t('settings_enable_alert')}</span>
-              <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
+              <label class="switch"><input type="checkbox" id="water-alert-toggle" checked /><span class="slider"></span></label>
             </div>
           </div>
         </div>

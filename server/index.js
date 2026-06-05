@@ -49,7 +49,9 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   email: { type: String, default: 'vonhacphuoc@gmail.com' },
-  emailAlertEnabled: { type: Boolean, default: true }
+  emailAlertEnabled: { type: Boolean, default: true },
+  waterAlertEnabled: { type: Boolean, default: true },
+  waterAlertThreshold: { type: Number, default: 15 }
 });
 
 const User = mongoose.model('User', userSchema, 'users');
@@ -580,8 +582,12 @@ async function sendWaterLowEmail() {
     if (user) {
       if (user.email) recipientEmail = user.email;
       if (user.emailAlertEnabled === false) {
-        console.log('>>> [Email] Người dùng đã tắt nhận thông báo email. Bỏ qua gửi cảnh báo.');
+        console.log('>>> [Email] Người dùng đã tắt nhận toàn bộ thông báo email. Bỏ qua gửi cảnh báo.');
         return { skipped: true, reason: 'disabled_by_user' };
+      }
+      if (user.waterAlertEnabled === false) {
+        console.log('>>> [Email] Người dùng đã tắt nhận thông báo nước thấp. Bỏ qua gửi cảnh báo.');
+        return { skipped: true, reason: 'water_alert_disabled' };
       }
     }
   } catch (dbErr) {
@@ -644,7 +650,9 @@ app.get('/api/user/profile', async (req, res) => {
     res.json({
       username: user.username,
       email: user.email || '',
-      emailAlertEnabled: user.emailAlertEnabled !== false
+      emailAlertEnabled: user.emailAlertEnabled !== false,
+      waterAlertEnabled: user.waterAlertEnabled !== false,
+      waterAlertThreshold: user.waterAlertThreshold !== undefined ? user.waterAlertThreshold : 15
     });
   } catch (error) {
     console.error('Lỗi GET /api/user/profile:', error);
@@ -654,7 +662,7 @@ app.get('/api/user/profile', async (req, res) => {
 
 // PUT /api/user/profile – Cập nhật thông tin tài khoản
 app.put('/api/user/profile', async (req, res) => {
-  const { username, email, password, emailAlertEnabled } = req.body;
+  const { username, email, password, emailAlertEnabled, waterAlertEnabled, waterAlertThreshold } = req.body;
   if (!username) {
     return res.status(400).json({ error: 'Thiếu tham số username.' });
   }
@@ -663,6 +671,8 @@ app.put('/api/user/profile', async (req, res) => {
     if (email !== undefined) updateData.email = email;
     if (password) updateData.password = password;
     if (emailAlertEnabled !== undefined) updateData.emailAlertEnabled = emailAlertEnabled;
+    if (waterAlertEnabled !== undefined) updateData.waterAlertEnabled = waterAlertEnabled;
+    if (waterAlertThreshold !== undefined) updateData.waterAlertThreshold = waterAlertThreshold;
 
     const user = await User.findOneAndUpdate({ username }, updateData, { new: true });
     if (!user) {
@@ -672,7 +682,9 @@ app.put('/api/user/profile', async (req, res) => {
       success: true,
       username: user.username,
       email: user.email,
-      emailAlertEnabled: user.emailAlertEnabled !== false
+      emailAlertEnabled: user.emailAlertEnabled !== false,
+      waterAlertEnabled: user.waterAlertEnabled !== false,
+      waterAlertThreshold: user.waterAlertThreshold !== undefined ? user.waterAlertThreshold : 15
     });
   } catch (error) {
     console.error('Lỗi PUT /api/user/profile:', error);
