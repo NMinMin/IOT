@@ -40,14 +40,14 @@ const initialNav = document.querySelector('.bottom-nav');
 if (initialNav) initialNav.style.display = 'none';
 
 /* ── Ghi nhớ đăng nhập: điền sẵn nếu đã lưu ── */
-const rememberCb   = document.getElementById('remember');
-const emailInput   = document.getElementById('login-email');
-const passInput    = document.getElementById('login-pass');
-const savedUser    = localStorage.getItem('rememberedUsername');
-const savedPass    = localStorage.getItem('rememberedPassword');
+const rememberCb = document.getElementById('remember');
+const emailInput = document.getElementById('login-email');
+const passInput = document.getElementById('login-pass');
+const savedUser = localStorage.getItem('rememberedUsername');
+const savedPass = localStorage.getItem('rememberedPassword');
 if (savedUser) {
-  emailInput.value  = savedUser;
-  passInput.value   = savedPass || '';
+  emailInput.value = savedUser;
+  passInput.value = savedPass || '';
   if (rememberCb) rememberCb.checked = true;
 }
 
@@ -81,7 +81,7 @@ const doLogin = async () => {
   btnLogin.textContent = t('login_loading');
 
   try {
-    const res = await fetch('http://localhost:5000/api/login', {
+    const res = await fetch('https://iot-j6ml.onrender.com/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -167,13 +167,13 @@ document.getElementById('btn-refill-water').addEventListener('click', () => {
   saveTankWater(100);
   setWaterValue(100, 0, 100);
   addActivityLog('water_manual', t('log_title_refill'), t('log_desc_refill'));
-  
+
   const alertWaterLow = document.getElementById('alert-water-low');
   if (alertWaterLow) alertWaterLow.classList.add('hidden');
   const globalWaterAlert = document.getElementById('global-water-alert');
   if (globalWaterAlert) globalWaterAlert.classList.add('hidden');
   window._waterAlertEmailSent = false;
-  
+
   showFancyToast(t('toast_refill_title'), t('toast_refill_success'), 'success');
 });
 
@@ -205,7 +205,7 @@ document.getElementById('btn-water').addEventListener('click', () => {
   decreaseTankWater(WATER_PER_MANUAL_PCT); // -9%: 45ml / 500ml
   addActivityLog('water_manual', t('log_title_water_manual'), t('log_desc_water_manual'));
   showFancyToast(t('toast_pump_active'), t('toast_pump_manual_start'), 'success', 5000);
-  
+
   setTimeout(() => {
     if (pumpManualSw) pumpManualSw.checked = false;
     updateFirebaseControl('pump_manual', false);
@@ -216,7 +216,7 @@ document.getElementById('btn-water').addEventListener('click', () => {
 /* ── Emergency stop ── */
 document.getElementById('btn-emergency').addEventListener('click', () => {
   const isCurrentlyEmergency = window.firebaseState?.control?.emergency === true;
-  
+
   if (!isCurrentlyEmergency) {
     if (confirm(t('confirm_emergency_stop'))) {
       updateFirebaseControl('emergency', true);
@@ -243,9 +243,9 @@ if (emailToggle) {
   emailToggle.addEventListener('change', async (e) => {
     const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
     const emailAlertEnabled = e.target.checked;
-    
+
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch('https://iot-j6ml.onrender.com/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUsername, emailAlertEnabled })
@@ -268,9 +268,9 @@ if (waterAlertToggle) {
   waterAlertToggle.addEventListener('change', async (e) => {
     const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
     const waterAlertEnabled = e.target.checked;
-    
+
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch('https://iot-j6ml.onrender.com/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUsername, waterAlertEnabled })
@@ -293,9 +293,9 @@ if (waterAlertSliderElement) {
   waterAlertSliderElement.addEventListener('change', async (e) => {
     const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
     const waterAlertThreshold = parseInt(e.target.value);
-    
+
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch('https://iot-j6ml.onrender.com/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: currentUsername, waterAlertThreshold })
@@ -314,11 +314,11 @@ if (waterAlertSliderElement) {
 
 /* ── Sliders ── */
 bindSlider('water-alert-slider', 'water-alert-label', '%');
-bindSlider('hum-min',   'hum-min-label',   '%');
-bindSlider('hum-max',   'hum-max-label',   '%');
+bindSlider('hum-min', 'hum-min-label', '%');
+bindSlider('hum-max', 'hum-max-label', '%');
 
 const luxLowSlider = document.getElementById('lux-low');
-const luxLowInput  = document.getElementById('lux-low-input');
+const luxLowInput = document.getElementById('lux-low-input');
 if (luxLowSlider && luxLowInput) {
   luxLowSlider.addEventListener('input', e => { luxLowInput.value = e.target.value; });
   luxLowSlider.addEventListener('change', e => {
@@ -391,10 +391,10 @@ if (btnEditProfile) {
     const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
     editUsernameInput.value = currentUsername;
     editPasswordInput.value = '';
-    
+
     // Tải profile để điền email hiện tại
     try {
-      const res = await fetch(`http://localhost:5000/api/user/profile?username=${encodeURIComponent(currentUsername)}`);
+      const res = await fetch(`https://iot-j6ml.onrender.com/api/user/profile?username=${encodeURIComponent(currentUsername)}`);
       if (res.ok) {
         const data = await res.json();
         editEmailInput.value = data.email || '';
@@ -402,7 +402,7 @@ if (btnEditProfile) {
     } catch (err) {
       console.error('Không thể lấy thông tin hồ sơ:', err);
     }
-    
+
     modalEditProfile.classList.remove('hidden');
     if (typeof lucide !== 'undefined') lucide.createIcons({ root: modalEditProfile });
   });
@@ -425,17 +425,17 @@ if (btnSaveProfile) {
     const username = editUsernameInput.value;
     const email = editEmailInput.value.trim();
     const password = editPasswordInput.value.trim();
-    
+
     if (!email) {
       alert(t('toast_profile_email_empty'));
       return;
     }
-    
+
     btnSaveProfile.disabled = true;
     btnSaveProfile.textContent = t('profile_saving');
-    
+
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch('https://iot-j6ml.onrender.com/api/user/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password })
@@ -445,13 +445,13 @@ if (btnSaveProfile) {
         // Cập nhật lại giao diện hiển thị
         const emailEl = document.getElementById('profile-display-email');
         if (emailEl) emailEl.textContent = data.email;
-        
+
         // Nếu thay đổi password, cập nhật cả savedPass để auto-login hoạt động đúng
         if (password) {
           localStorage.setItem('rememberedPassword', password);
           passInput.value = password;
         }
-        
+
         showFancyToast(t('toast_refill_title'), t('toast_profile_success'), 'success');
         hideProfileModal();
       } else {
@@ -549,23 +549,23 @@ if (modalActivity) {
 }
 
 /* ── Modal Lịch Bảo Trì ── */
-const btnSaveMaint        = document.getElementById('btn-save-maint');
-const maintDatetimeInput  = document.getElementById('maint-datetime');
+const btnSaveMaint = document.getElementById('btn-save-maint');
+const maintDatetimeInput = document.getElementById('maint-datetime');
 const maintCategorySelect = document.getElementById('maint-category');
-const maintScheduledList  = document.getElementById('maint-scheduled-list');
+const maintScheduledList = document.getElementById('maint-scheduled-list');
 
-const MAINT_API = 'http://localhost:5000/api/maintenance';
+const MAINT_API = 'https://iot-j6ml.onrender.com/api/maintenance';
 
 const MAINT_CATEGORY_LABELS = {
-  soil:       t('schedule_opt_soil').replace('🪴 ', ''),
+  soil: t('schedule_opt_soil').replace('🪴 ', ''),
   fertilizer: t('schedule_opt_fertilizer').replace('🌿 ', ''),
-  prune:      t('schedule_opt_prune').replace('✂️ ', ''),
+  prune: t('schedule_opt_prune').replace('✂️ ', ''),
 };
 
 const MAINT_CATEGORY_COLORS = {
-  soil:       '#A07C5A',
+  soil: '#A07C5A',
   fertilizer: '#88AB75',
-  prune:      '#78C0ED',
+  prune: '#78C0ED',
 };
 
 const DOW_LABELS = [
@@ -586,7 +586,7 @@ const formatMaintDateTime = (isoStr) => {
   if (!isoStr) return '';
   const d = new Date(isoStr);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 const formatMaintRecur = (item) => {
@@ -611,14 +611,14 @@ const applyRecurMode = (mode) => {
   document.querySelectorAll('.maint-recur-btn').forEach(btn => {
     const isActive = btn.dataset.recur === mode;
     btn.classList.toggle('active', isActive);
-    btn.style.background    = isActive ? 'var(--primary-green)' : '#f5f5f5';
-    btn.style.color         = isActive ? '#fff' : 'var(--dark-green)';
-    btn.style.borderColor   = isActive ? 'var(--primary-green)' : '#ccc';
+    btn.style.background = isActive ? 'var(--primary-green)' : '#f5f5f5';
+    btn.style.color = isActive ? '#fff' : 'var(--dark-green)';
+    btn.style.borderColor = isActive ? 'var(--primary-green)' : '#ccc';
   });
 
   // Hiện/ẩn panel
-  document.getElementById('maint-panel-once').style.display    = mode === 'once'    ? '' : 'none';
-  document.getElementById('maint-panel-weekly').style.display  = mode === 'weekly'  ? '' : 'none';
+  document.getElementById('maint-panel-once').style.display = mode === 'once' ? '' : 'none';
+  document.getElementById('maint-panel-weekly').style.display = mode === 'weekly' ? '' : 'none';
   document.getElementById('maint-panel-monthly').style.display = mode === 'monthly' ? '' : 'none';
 };
 
@@ -647,7 +647,7 @@ const renderMaintList = async () => {
     const recurStr = formatMaintRecur(item);
 
     const isRecur = item.recurrence && item.recurrence !== 'once';
-    const isPast  = !isRecur && item.datetime && new Date(item.datetime) < new Date();
+    const isPast = !isRecur && item.datetime && new Date(item.datetime) < new Date();
 
     let badgeHtml = '';
     if (isRecur) {
@@ -713,15 +713,15 @@ document.querySelectorAll('.maint-dow-btn').forEach(btn => {
     if (idx === -1) {
       maintSelectedDows.push(dow);
       btn.classList.add('active');
-      btn.style.background   = 'var(--primary-green)';
-      btn.style.color        = '#fff';
-      btn.style.borderColor  = 'var(--primary-green)';
+      btn.style.background = 'var(--primary-green)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'var(--primary-green)';
     } else {
       maintSelectedDows.splice(idx, 1);
       btn.classList.remove('active');
-      btn.style.background   = '#f5f5f5';
-      btn.style.color        = 'var(--dark-green)';
-      btn.style.borderColor  = '#ccc';
+      btn.style.background = '#f5f5f5';
+      btn.style.color = 'var(--dark-green)';
+      btn.style.borderColor = '#ccc';
     }
   });
 });
@@ -740,8 +740,8 @@ window.__initSchedulePage = async () => {
   maintSelectedDows = [];
   document.querySelectorAll('.maint-dow-btn').forEach(b => {
     b.classList.remove('active');
-    b.style.background  = '#f5f5f5';
-    b.style.color       = 'var(--dark-green)';
+    b.style.background = '#f5f5f5';
+    b.style.color = 'var(--dark-green)';
     b.style.borderColor = '#ccc';
   });
 

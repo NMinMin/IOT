@@ -4,7 +4,7 @@ import { t } from './locales.js';
 // Cấu hình kết nối Firebase và Backend Local
 const FIREBASE_DB_URL = "https://smart-green-house-iot-default-rtdb.asia-southeast1.firebasedatabase.app/";
 const FIREBASE_SECRET = "1Gi5Y2PkpsymHPnnBAQAXHY8e6AyWf4OdqFwheer";
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = "https://iot-j6ml.onrender.com";
 
 // Trạng thái dữ liệu Firebase lưu tại Local
 window.firebaseState = {
@@ -14,7 +14,7 @@ window.firebaseState = {
 };
 
 // ─── Mực nước bể: 500ml = 100% ───
-const WATER_PER_PUMP_PCT   = 24; // Tự động: 120ml  → 120/500 = 24%
+const WATER_PER_PUMP_PCT = 24; // Tự động: 120ml  → 120/500 = 24%
 const WATER_PER_MANUAL_PCT = 9;  // Thủ công: 45ml  → 45/500 = 9%
 
 function getTankWater() {
@@ -100,14 +100,14 @@ export function addActivityLog(type, title, desc) {
     schedule: 'lich',
   };
   const cat = CAT_MAP[type] || 'canh_bao';
-  const now  = new Date();
+  const now = new Date();
   const dateStr = now.toLocaleDateString('sv-SE');
   const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  const action  = desc ? `${title} – ${desc}` : title;
+  const action = desc ? `${title} – ${desc}` : title;
 
   // 1. Cập nhật localStorage theo format nhóm ngày
   const store = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
-  let dayDoc  = store.find(d => d.date === dateStr);
+  let dayDoc = store.find(d => d.date === dateStr);
   if (!dayDoc) {
     dayDoc = { date: dateStr, den: [], bom: [], canh_bao: [], lich: [] };
     store.unshift(dayDoc);
@@ -138,7 +138,7 @@ export async function loadMoreLogs(category, append = false) {
     const res = await fetch(`${BACKEND_URL}/api/activity/list?category=${category}&limit=${LOG_LIMIT}&skip=${skipLogs}`);
     if (res.ok) {
       const data = await res.json();
-      
+
       loadingLogs = false;
       if (data.length < LOG_LIMIT) noMoreLogs = true;
       skipLogs += data.length;
@@ -211,7 +211,7 @@ export async function loadMoreLogs(category, append = false) {
               <span class="log-day-count">${groupItems.length} ${t('stats_activities_count')}</span>
             </div>
           `;
-          
+
           const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
           groupDiv.innerHTML = headerHTML + itemsHTML;
           container.appendChild(groupDiv);
@@ -220,7 +220,7 @@ export async function loadMoreLogs(category, append = false) {
         Object.keys(grouped).forEach(dateStr => {
           const groupItems = grouped[dateStr];
           let existingGroup = container.querySelector(`.log-day-group[data-date="${dateStr}"]`);
-          
+
           if (existingGroup) {
             const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
             const tempDiv = document.createElement('div');
@@ -244,7 +244,7 @@ export async function loadMoreLogs(category, append = false) {
                 <span class="log-day-count">${groupItems.length} ${t('stats_activities_count')}</span>
               </div>
             `;
-            
+
             const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
             groupDiv.innerHTML = headerHTML + itemsHTML;
             container.appendChild(groupDiv);
@@ -313,7 +313,7 @@ function setupLogFilter() {
 
 function setupLogScrollListeners() {
   if (scrollListenersAttached) return;
-  
+
   const scrollContainer = document.getElementById('activity-log-list');
   if (scrollContainer) {
     scrollContainer.addEventListener('scroll', () => {
@@ -324,16 +324,16 @@ function setupLogScrollListeners() {
       }
     });
   }
-  
+
   scrollListenersAttached = true;
 }
 
 
 let currentPage = 'dashboard';
-let prevPage    = null;
+let prevPage = null;
 let healthChart = null;
-let statChart   = null;
-let waterChart  = null;
+let statChart = null;
+let waterChart = null;
 
 /* ── Router ── */
 export function goTo(page) {
@@ -349,14 +349,14 @@ export function goTo(page) {
   const target = document.getElementById(`page-${page}`);
   if (target) target.classList.add('active');
 
-  prevPage    = currentPage;
+  prevPage = currentPage;
   currentPage = page;
 
   updateHeader(page);
   updateNavBar(page);
 
   // Lazy init charts
-  if (page === 'dashboard')  initHealthChart();
+  if (page === 'dashboard') initHealthChart();
   if (page === 'statistics') { initStatChart(); initWaterChart(); renderActivityLog(); renderMonthlySummary(); }
   if (page === 'schedule') {
     if (window.__initSchedulePage) window.__initSchedulePage();
@@ -380,26 +380,26 @@ export function goBack() {
 
 /* ── Header updater ── */
 function updateHeader(page) {
-  const title    = document.getElementById('hdr-title');
-  const sub      = document.getElementById('hdr-sub');
-  const btnBack  = document.getElementById('btn-back');
+  const title = document.getElementById('hdr-title');
+  const sub = document.getElementById('hdr-sub');
+  const btnBack = document.getElementById('btn-back');
   const statTabs = document.getElementById('stats-tabs');
-  const weather  = document.getElementById('weather-badge');
+  const weather = document.getElementById('weather-badge');
 
   statTabs?.classList.add('hidden');
   btnBack?.classList.add('hidden');
   weather?.classList.remove('hidden');
 
   const map = {
-    dashboard:  [t('login_title'), t('hdr_sub_dashboard')],
+    dashboard: [t('login_title'), t('hdr_sub_dashboard')],
     statistics: [`<i data-lucide="trending-up"></i> ${t('stats_title')}`, t('hdr_sub_statistics')],
-    schedule:   [`<i data-lucide="calendar"></i> ${t('schedule_title')}`, t('hdr_sub_schedule')],
-    settings:   [`<i data-lucide="settings"></i> ${t('settings_title')}`, t('hdr_sub_settings')],
+    schedule: [`<i data-lucide="calendar"></i> ${t('schedule_title')}`, t('hdr_sub_schedule')],
+    settings: [`<i data-lucide="settings"></i> ${t('settings_title')}`, t('hdr_sub_settings')],
   };
 
   const [hdrTitle, hdrSub] = map[page] || map.dashboard;
   if (title) title.innerHTML = hdrTitle;
-  if (sub)   sub.innerHTML   = hdrSub;
+  if (sub) sub.innerHTML = hdrSub;
 
   if (page !== 'dashboard') {
     btnBack?.classList.remove('hidden');
@@ -421,14 +421,14 @@ export function setWaterValue(val, min = 0, max = 100) {
   let pct = ((val - min) / (max - min)) * 100;
   pct = Math.max(0, Math.min(100, pct)); // Clamp between 0-100
   pct = Math.round(pct);
-  
+
   const fill = document.getElementById('drop-fill');
   const pctEl = document.getElementById('drop-pct');
   const subEl = document.getElementById('drop-sub');
-  
+
   if (fill) fill.style.height = pct + '%';
   if (pctEl) pctEl.textContent = pct + '%';
-  
+
   if (subEl) {
     if (pct < 20) subEl.textContent = t('water_tank_low');
     else if (pct < 75) subEl.textContent = t('water_tank_stable');
@@ -503,15 +503,15 @@ export function showFancyToast(title, message, type = 'info', duration = 4000) {
     container.className = 'toast-container';
     document.body.appendChild(container);
   }
-  
+
   const toast = document.createElement('div');
   toast.className = `fancy-toast ${type}`;
-  
+
   let iconName = 'info';
   if (type === 'success') iconName = 'check-circle';
   if (type === 'warning') iconName = 'alert-triangle';
   if (type === 'error') iconName = 'x-circle';
-  
+
   toast.innerHTML = `
     <div class="fancy-toast-body">
       <div class="fancy-toast-icon"><i data-lucide="${iconName}"></i></div>
@@ -525,27 +525,27 @@ export function showFancyToast(title, message, type = 'info', duration = 4000) {
       <div class="fancy-toast-progress"></div>
     </div>
   `;
-  
+
   container.appendChild(toast);
-  
+
   if (typeof lucide !== 'undefined') {
     lucide.createIcons({ root: toast });
   }
-  
+
   const closeBtn = toast.querySelector('.fancy-toast-close');
   closeBtn.addEventListener('click', () => {
     toast.classList.add('hide');
     setTimeout(() => toast.remove(), 300);
   });
-  
+
   const progress = toast.querySelector('.fancy-toast-progress');
   progress.style.animationDuration = `${duration}ms`;
-  
+
   const timer = setTimeout(() => {
     toast.classList.add('hide');
     setTimeout(() => toast.remove(), 300);
   }, duration);
-  
+
   toast.dataset.timer = timer;
 }
 
@@ -555,10 +555,10 @@ export function showFancyToast(title, message, type = 'info', duration = 4000) {
 export function initFirebaseSync() {
   const dbUrl = FIREBASE_DB_URL.endsWith('/') ? FIREBASE_DB_URL : `${FIREBASE_DB_URL}/`;
   const streamUrl = `${dbUrl}.json?auth=${FIREBASE_SECRET}`;
-  
+
   console.log('>>> Bắt đầu kết nối EventSource...');
   const eventSource = new EventSource(streamUrl);
-  
+
   eventSource.addEventListener('put', (e) => {
     try {
       const payload = JSON.parse(e.data);
@@ -588,9 +588,9 @@ export function initFirebaseSync() {
 
 function handleFirebaseUpdate(path, data) {
   if (!path || data === null) return;
-  
+
   const segments = path.split('/').filter(Boolean);
-  
+
   if (segments.length === 0) {
     window.firebaseState = { ...window.firebaseState, ...data };
   } else if (segments.length === 1) {
@@ -610,11 +610,11 @@ function updateUIFromFirebaseState() {
   // 1. Cập nhật các thông số cảm biến trên Dashboard
   const valLight = document.getElementById('val-light');
   const valHum = document.getElementById('val-hum');
-  
+
   if (valLight && state.sensor.lux !== undefined) {
     valLight.textContent = Math.round(state.sensor.lux).toLocaleString('vi-VN') + ' Lux';
   }
-  
+
   if (valHum && state.sensor.soil_raw !== undefined) {
     const humPercent = Math.max(0, Math.min(100, Math.round(((4095 - state.sensor.soil_raw) / 4095) * 100)));
     valHum.textContent = humPercent + '%';
@@ -626,14 +626,14 @@ function updateUIFromFirebaseState() {
   const waterAlertSlider = document.getElementById('water-alert-slider');
   const threshold = waterAlertSlider ? parseInt(waterAlertSlider.value) : 15;
   const isWaterLow = state.sensor.water_status === 'HET_NUOC' || getTankWater() < threshold;
-  
+
   if (alertWaterLow) {
     alertWaterLow.classList.toggle('hidden', !isWaterLow);
   }
   if (globalWaterAlert) {
     globalWaterAlert.classList.toggle('hidden', !isWaterLow);
   }
-  
+
   if (isWaterLow) {
     saveTankWater(5);
     if (!window._waterLowLogged) {
@@ -685,7 +685,7 @@ function updateUIFromFirebaseState() {
   // 3. Cập nhật switch điều khiển thiết bị thủ công (nếu phần tử tồn tại)
   const pumpManualSw = document.getElementById('control-pump-manual');
   const lightManualSw = document.getElementById('control-light-manual');
-  
+
   if (pumpManualSw && state.control.pump_manual !== undefined) {
     pumpManualSw.checked = state.control.pump_manual;
   }
@@ -699,7 +699,7 @@ function updateUIFromFirebaseState() {
     const isEmergency = state.control.emergency === true;
     btnEmergency.classList.toggle('active', isEmergency);
     btnEmergency.textContent = isEmergency ? 'KHÔI PHỤC HỆ THỐNG' : 'DỪNG NGAY';
-    
+
     // Cập nhật giao diện của nút và card tương ứng
     const emrgCard = btnEmergency.closest('.emrg-card');
     if (isEmergency) {
@@ -870,8 +870,8 @@ async function initHealthChart() {
     const days = Object.values(groups);
     return {
       labels: days.map(d => d.label),
-      lux:    days.map(d => avg(d.lux)),
-      hum:    days.map(d => avg(d.hum))
+      lux: days.map(d => avg(d.lux)),
+      hum: days.map(d => avg(d.hum))
     };
   }
 
@@ -967,9 +967,9 @@ async function initStatChart() {
         tooltip: tooltipStyle()
       },
       scales: {
-        x:  { grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#8fa090' } },
-        yL: { position: 'left',  grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#c8a800', callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
-        yR: { position: 'right', grid: { drawOnChartArea: false },   ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#5a8a65', callback: v => v+'%' } }
+        x: { grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#8fa090' } },
+        yL: { position: 'left', grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#c8a800', callback: v => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v } },
+        yR: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#5a8a65', callback: v => v + '%' } }
       }
     }
   });
@@ -980,11 +980,11 @@ async function initStatChart() {
       document.querySelectorAll('#stats-tabs .tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const tab = btn.dataset.tab;
-      
+
       let count = 10;
       if (tab === 'weekly') count = 30;
       if (tab === 'monthly') count = 80;
-      
+
       const filtered = logs.slice(-count);
       statChart.data.labels = filtered.map(log => new Date(log.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
       statChart.data.datasets[0].data = filtered.map(log => Math.round(log.lux));
@@ -1119,17 +1119,17 @@ export function openPumpHistoryModal() {
 function _paintPumpLogs(container, days) {
   // Lọc chỉ lấy những ngày có hoạt động bơm
   const daysWithPump = days.filter(day => Array.isArray(day.bom) && day.bom.length > 0);
-  
+
   if (daysWithPump.length === 0) {
     container.innerHTML = `<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">${t('stats_no_activity')}</p>`;
     return;
   }
 
-  const todayStr     = new Date().toLocaleDateString('sv-SE');
+  const todayStr = new Date().toLocaleDateString('sv-SE');
   const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
 
   function dayLabel(dateStr) {
-    if (dateStr === todayStr)     return t('today_header');
+    if (dateStr === todayStr) return t('today_header');
     if (dateStr === yesterdayStr) return t('yesterday_label');
     const [y, m, d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
@@ -1139,23 +1139,23 @@ function _paintPumpLogs(container, days) {
     const rows = day.bom.map(e => {
       // Phân biệt tự động/thủ công/tắt
       const isAuto = e.action.toLowerCase().includes('tự động') || e.action.toLowerCase().includes('auto');
-      const isOff  = e.action.toLowerCase().includes('tắt') || e.action.toLowerCase().includes('ngắt') || e.action.toLowerCase().includes('off');
-      
+      const isOff = e.action.toLowerCase().includes('tắt') || e.action.toLowerCase().includes('ngắt') || e.action.toLowerCase().includes('off');
+
       let badgeClass = 'manual';
-      let badgeText  = t('pump_manual');
-      let iconClass  = 'manual';
-      let iconName   = 'droplet';
+      let badgeText = t('pump_manual');
+      let iconClass = 'manual';
+      let iconName = 'droplet';
 
       if (isAuto) {
         badgeClass = 'auto';
-        badgeText  = t('pump_auto');
-        iconClass  = 'auto';
-        iconName   = 'cpu';
+        badgeText = t('pump_auto');
+        iconClass = 'auto';
+        iconName = 'cpu';
       } else if (isOff) {
         badgeClass = 'off';
-        badgeText  = t('pump_off');
-        iconClass  = 'off';
-        iconName   = 'power';
+        badgeText = t('pump_off');
+        iconClass = 'off';
+        iconName = 'power';
       }
 
       return `
@@ -1195,18 +1195,18 @@ export async function renderMonthlySummary() {
     console.warn('Lỗi khi tải tổng kết tháng:', err);
   }
 
-  const monthEl    = document.getElementById('monthly-month');
-  const luxEl      = document.getElementById('monthly-lux');
-  const pumpEl     = document.getElementById('monthly-pump');
-  const waterEl    = document.getElementById('monthly-water');
+  const monthEl = document.getElementById('monthly-month');
+  const luxEl = document.getElementById('monthly-lux');
+  const pumpEl = document.getElementById('monthly-pump');
+  const waterEl = document.getElementById('monthly-water');
 
   if (!monthEl || !luxEl || !pumpEl || !waterEl) return;
 
   if (!summary) {
     // Nếu API lỗi, hiển thị placeholder
     monthEl.textContent = new Date().getMonth() + 1;
-    luxEl.textContent   = '--';
-    pumpEl.textContent  = '--';
+    luxEl.textContent = '--';
+    pumpEl.textContent = '--';
     waterEl.textContent = t('stats_no_prev_data');
     return;
   }
@@ -1252,7 +1252,7 @@ export async function loadUserProfile(username) {
       const emailEl = document.getElementById('profile-display-email');
       if (nameEl) nameEl.textContent = data.username || username;
       if (emailEl) emailEl.textContent = data.email || 'Chưa thiết lập email';
-      
+
       const emailToggle = document.getElementById('email-notification-toggle');
       if (emailToggle) {
         emailToggle.checked = data.emailAlertEnabled !== false;
@@ -1272,7 +1272,7 @@ export async function loadUserProfile(username) {
           waterAlertLabel.textContent = threshold + '%';
         }
       }
-      
+
       return data;
     }
   } catch (err) {
@@ -1287,12 +1287,12 @@ export function exportToExcel() {
 export async function exportToPDF() {
   const currentLang = localStorage.getItem('language') || 'vi';
   showToast('<i data-lucide="loader" class="animate-spin" style="width:18px;height:18px"></i> ' + t('toast_generating_pdf'));
-  
+
   try {
     const res = await fetch(`${BACKEND_URL}/api/export/data`);
     if (!res.ok) throw new Error('Không thể tải dữ liệu xuất.');
     const data = await res.json();
-    
+
     // Mở cửa sổ in ấn mới
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -1611,7 +1611,7 @@ function updateWeatherUI(data) {
   const forecastdays = data.forecast?.forecastday;
   if (wcForecast && forecastdays && forecastdays.length >= 3) {
     let html = `<div class="wc-f-title">${t('forecast_3_days')}</div>`;
-    
+
     // Bỏ qua ngày hôm nay (index 0), lấy ngày mai (index 1) và ngày kia (index 2)
     forecastdays.slice(1).forEach((dayData, idx) => {
       const isTomorrow = idx === 0;
@@ -1624,7 +1624,7 @@ function updateWeatherUI(data) {
         const DOW_KEYS = ['dow_sun', 'dow_mon', 'dow_tue', 'dow_wed', 'dow_thu', 'dow_fri', 'dow_sat'];
         dayLabel = t(DOW_KEYS[dayOfWeek]);
       }
-      
+
       const dayIcon = dayData.day.condition.icon;
       const dayIconUrl = dayIcon.startsWith('//') ? 'https:' + dayIcon : dayIcon;
       const maxTemp = Math.round(dayData.day.maxtemp_c);
@@ -1639,7 +1639,7 @@ function updateWeatherUI(data) {
         </div>
       `;
     });
-    
+
     wcForecast.innerHTML = html;
   }
 }
@@ -1648,7 +1648,7 @@ export async function initWeather() {
   const apiKey = "dbe54977752e443891d134016262704";
   const city = "Dong Nai";
   const lang = localStorage.getItem('language') || 'vi';
-  
+
   const fetchWeather = async () => {
     try {
       const res = await fetch(`http://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${encodeURIComponent(city)}&days=3&aqi=no&alerts=no&lang=${lang}`);
