@@ -2,7 +2,9 @@
   "sensor": {
     "soil_raw": 4095,
     "lux": 120,
-    "water_status": "CON_NUOC"
+    "water_status": "CON_NUOC",
+    "pump_status": "OFF",
+    "light_status": "OFF"
   },
   "setting": {
     "soil_min": 3000,
