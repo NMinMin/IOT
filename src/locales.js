@@ -163,7 +163,7 @@ const translations = {
     settings_water_alert_title: "Cảnh Báo Mực Nước Thấp",
     settings_water_alert_desc: "Hệ thống sẽ gửi thông báo và tin nhắn SMS khi nước trong bể còn dưới mức quy định.",
     settings_alert_threshold: "Ngưỡng báo động",
-    settings_enable_alert: "Bật cảnh báo",
+    settings_enable_alert: "Bật thông báo",
     settings_humidity_threshold: "Ngưỡng Độ Ẩm Đất",
     settings_min: "Tối thiểu",
     settings_max: "Tối đa",
