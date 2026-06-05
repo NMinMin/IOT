@@ -91,25 +91,12 @@ const sensorLogSchema = new mongoose.Schema({
 // Tạo Model kết nối tới database 'smart_green_house' và collection 'sensor_logs'
 const SensorLog = mongoose.model('SensorLog', sensorLogSchema, 'sensor_logs');
 
-<<<<<<< HEAD
 // Định nghĩa Schema cho Lượng nước tiêu thụ hàng ngày (Daily Water)
 const dailyWaterSchema = new mongoose.Schema({
-  date:      { type: String, required: true, unique: true }, // YYYY-MM-DD
+  date: { type: String, required: true, unique: true }, // YYYY-MM-DD
   amount_ml: { type: Number, default: 0 }
 });
 const DailyWater = mongoose.model('DailyWater', dailyWaterSchema, 'daily_water');
-=======
-// Định nghĩa Schema cho Nhật ký hoạt động (Activity Logs)
-const activityLogSchema = new mongoose.Schema({
-  timestamp: { type: Date, default: Date.now },
-  type: { type: String, enum: ['pump', 'light', 'water', 'system'], required: true },
-  status: { type: String, required: true },
-  message: { type: String, required: true }
-});
-
-// Tạo Model kết nối tới database 'smart_green_house' và collection 'activity_logs'
-const ActivityLog = mongoose.model('ActivityLog', activityLogSchema, 'activity_logs');
->>>>>>> 8ef5c97147c831e4bea67037c8041cc2feb53dfd
 
 // API: Lấy lịch sử dữ liệu cảm biến (giới hạn 100 bản ghi mới nhất)
 app.get('/api/logs', async (req, res) => {
@@ -117,25 +104,12 @@ app.get('/api/logs', async (req, res) => {
     const logs = await SensorLog.find()
       .sort({ timestamp: -1 })
       .limit(100);
-    
+
     // Đảo ngược lại danh sách để vẽ biểu đồ theo chiều thời gian tăng dần (cũ -> mới)
     res.json(logs.reverse());
   } catch (error) {
     console.error('Lỗi khi truy vấn logs:', error);
     res.status(500).json({ error: 'Không thể lấy dữ liệu lịch sử.' });
-  }
-});
-
-// API: Lấy nhật ký hoạt động mới nhất (giới hạn 20 bản ghi)
-app.get('/api/activities', async (req, res) => {
-  try {
-    const activities = await ActivityLog.find()
-      .sort({ timestamp: -1 })
-      .limit(20);
-    res.json(activities);
-  } catch (error) {
-    console.error('Lỗi khi truy vấn nhật ký hoạt động:', error);
-    res.status(500).json({ error: 'Không thể lấy dữ liệu nhật ký hoạt động.' });
   }
 });
 
@@ -147,7 +121,7 @@ app.get('/api/status', (req, res) => {
 // API: Đăng nhập tài khoản từ Web Frontend
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  
+
   if (!username || !password) {
     return res.status(400).json({ success: false, error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu!' });
   }
@@ -157,7 +131,7 @@ app.post('/api/login', async (req, res) => {
     if (!user || user.password !== password) {
       return res.status(401).json({ success: false, error: 'Tên đăng nhập hoặc mật khẩu không chính xác!' });
     }
-    
+
     res.json({ success: true, username: user.username });
   } catch (error) {
     console.error('Lỗi đăng nhập:', error);
@@ -165,14 +139,13 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 // ══════════════════════════════════════════════
 // Schema & API: Mực nước bể (tank_state)
 // ══════════════════════════════════════════════
 const tankStateSchema = new mongoose.Schema({
-  key:        { type: String, default: 'main' },
-  water_pct:  { type: Number, default: 100 },
-  updated_at: { type: Date,   default: Date.now }
+  key: { type: String, default: 'main' },
+  water_pct: { type: Number, default: 100 },
+  updated_at: { type: Date, default: Date.now }
 });
 const TankState = mongoose.model('TankState', tankStateSchema, 'tank_state');
 
@@ -221,24 +194,24 @@ const entrySchema = new mongoose.Schema(
   { _id: false }
 );
 const activityLogSchema = new mongoose.Schema({
-  date:      { type: String, required: true, unique: true }, // YYYY-MM-DD
-  den:       { type: [entrySchema], default: [] },
-  bom:       { type: [entrySchema], default: [] },
-  canh_bao:  { type: [entrySchema], default: [] },
-  lich:      { type: [entrySchema], default: [] },
+  date: { type: String, required: true, unique: true }, // YYYY-MM-DD
+  den: { type: [entrySchema], default: [] },
+  bom: { type: [entrySchema], default: [] },
+  canh_bao: { type: [entrySchema], default: [] },
+  lich: { type: [entrySchema], default: [] },
 });
 const ActivityLog = mongoose.model('ActivityLog', activityLogSchema, 'activity_logs');
 
 // Mapping type → category
 const TYPE_TO_CAT = {
-  light_on:     'den',
-  light_off:    'den',
-  water_auto:   'bom',
+  light_on: 'den',
+  light_off: 'den',
+  water_auto: 'bom',
   water_manual: 'bom',
-  pump_off:     'bom',
-  water_low:    'canh_bao',
-  emergency:    'canh_bao',
-  schedule:     'lich',
+  pump_off: 'bom',
+  water_low: 'canh_bao',
+  emergency: 'canh_bao',
+  schedule: 'lich',
 };
 
 // POST /api/activity – upsert vào ngày hôm nay
@@ -247,12 +220,12 @@ app.post('/api/activity', async (req, res) => {
   if (!type || !title) return res.status(400).json({ error: 'Thiếu type hoặc title.' });
 
   const cat = TYPE_TO_CAT[type] || 'canh_bao';
-  const now  = new Date();
+  const now = new Date();
   // date theo giờ Việt Nam (UTC+7)
   const vnDate = new Date(now.getTime() + 7 * 3600000);
   const dateStr = vnDate.toISOString().slice(0, 10); // YYYY-MM-DD
   const timeStr = vnDate.toISOString().slice(11, 16); // HH:MM
-  const action  = desc ? `${title} – ${desc}` : title;
+  const action = desc ? `${title} – ${desc}` : title;
 
   try {
     // Tránh ghi trùng log nếu nhiều client/tab gửi cùng lúc
@@ -313,19 +286,19 @@ app.get('/api/activity/list', async (req, res) => {
   const { category = 'all', limit = 10, skip = 0 } = req.query;
   const lim = parseInt(limit);
   const skp = parseInt(skip);
-  
+
   if (!['den', 'bom', 'canh_bao', 'lich', 'all'].includes(category)) {
     return res.status(400).json({ error: 'Category không hợp lệ.' });
   }
-  
+
   try {
     const days = await ActivityLog.find().sort({ date: -1 });
     let allEntries = [];
-    
+
     for (const day of days) {
       const cats = category === 'all' ? ['den', 'bom', 'canh_bao', 'lich'] : [category];
       const dayEntries = [];
-      
+
       for (const cat of cats) {
         const entries = day[cat] || [];
         entries.forEach(e => {
@@ -337,12 +310,12 @@ app.get('/api/activity/list', async (req, res) => {
           });
         });
       }
-      
+
       // Sắp xếp các entry trong cùng một ngày theo thời gian giảm dần
       dayEntries.sort((a, b) => b.time.localeCompare(a.time));
       allEntries.push(...dayEntries);
     }
-    
+
     const paginated = allEntries.slice(skp, skp + lim);
     res.json(paginated);
   } catch (error) {
@@ -359,25 +332,25 @@ app.get('/api/water/daily', async (req, res) => {
     const currentDay = vnDate.getDay();
     const diff = vnDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1);
     const monday = new Date(vnDate.setDate(diff));
-    
+
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       weekDates.push(d.toISOString().slice(0, 10));
     }
-    
+
     const records = await DailyWater.find({ date: { $in: weekDates } });
     const recordMap = {};
     records.forEach(r => {
       recordMap[r.date] = r.amount_ml;
     });
-    
+
     const result = weekDates.map(dateStr => {
       const ml = recordMap[dateStr] || 0;
       return parseFloat((ml / 1000).toFixed(3)); // Lít
     });
-    
+
     res.json(result);
   } catch (error) {
     console.error('Lỗi GET /api/water/daily:', error);
@@ -391,12 +364,12 @@ let lastSyncLight = null;
 
 async function saveActivityLogBackend(type, title, desc) {
   const cat = TYPE_TO_CAT[type] || 'canh_bao';
-  const now  = new Date();
+  const now = new Date();
   const vnDate = new Date(now.getTime() + 7 * 3600000);
   const dateStr = vnDate.toISOString().slice(0, 10);
   const timeStr = vnDate.toISOString().slice(11, 16);
-  const action  = desc ? `${title} – ${desc}` : title;
-  
+  const action = desc ? `${title} – ${desc}` : title;
+
   try {
     await ActivityLog.findOneAndUpdate(
       { date: dateStr },
@@ -408,29 +381,23 @@ async function saveActivityLogBackend(type, title, desc) {
     console.error('Lỗi khi ghi log tự động từ backend:', error);
   }
 }
-=======
-// Lưu trạng thái trước đó để phát hiện thay đổi
-let lastPumpStatus = null;
-let lastLightStatus = null;
-let lastWaterStatus = null;
->>>>>>> 8ef5c97147c831e4bea67037c8041cc2feb53dfd
 
 // Logic chạy ngầm: Tự động lấy dữ liệu từ Firebase và ghi vào MongoDB Atlas
 async function syncFirebaseToMongo() {
   try {
-    const dbUrl = process.env.FIREBASE_DB_URL.endsWith('/') 
-      ? process.env.FIREBASE_DB_URL 
+    const dbUrl = process.env.FIREBASE_DB_URL.endsWith('/')
+      ? process.env.FIREBASE_DB_URL
       : `${process.env.FIREBASE_DB_URL}/`;
-    
+
     const firebaseUrl = `${dbUrl}sensor.json?auth=${process.env.FIREBASE_SECRET}`;
-    
+
     const response = await fetch(firebaseUrl);
     if (!response.ok) {
       throw new Error(`Firebase HTTP error! Status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     if (data) {
       const { soil_raw, lux, water_status, pump_status, light_status } = data;
       const currentPump = pump_status || 'OFF';
@@ -438,7 +405,6 @@ async function syncFirebaseToMongo() {
       const currentWater = water_status || 'UNKNOWN';
 
       // Khôi phục trạng thái cũ từ DB nếu server mới restart
-<<<<<<< HEAD
       if (lastSyncPump === null || lastSyncLight === null) {
         const lastLog = await SensorLog.findOne().sort({ timestamp: -1 });
         if (lastLog) {
@@ -447,27 +413,14 @@ async function syncFirebaseToMongo() {
         } else {
           lastSyncPump = 'OFF';
           lastSyncLight = 'OFF';
-=======
-      if (lastPumpStatus === null || lastLightStatus === null || lastWaterStatus === null) {
-        const lastLog = await SensorLog.findOne().sort({ timestamp: -1 });
-        if (lastLog) {
-          lastPumpStatus = lastLog.pump_status || 'OFF';
-          lastLightStatus = lastLog.light_status || 'OFF';
-          lastWaterStatus = lastLog.water_status || 'UNKNOWN';
-        } else {
-          lastPumpStatus = 'OFF';
-          lastLightStatus = 'OFF';
-          lastWaterStatus = 'CON_NUOC';
->>>>>>> 8ef5c97147c831e4bea67037c8041cc2feb53dfd
         }
       }
 
       // Phát hiện và ghi nhận sự kiện hoạt động
       // 1. Máy bơm
-<<<<<<< HEAD
       if (currentPump !== lastSyncPump) {
         let waterAdd = 0;
-        
+
         if (currentPump === 'ON_AUTO') {
           await saveActivityLogBackend('water_auto', 'Tưới nước tự động', 'Đất khô, tự động kích hoạt tưới nước (5 giây).');
           waterAdd = 120; // 120ml
@@ -476,12 +429,12 @@ async function syncFirebaseToMongo() {
         } else if (currentPump === 'OFF' && lastSyncPump === 'ON_AUTO') {
           await saveActivityLogBackend('pump_off', 'Tắt máy bơm', 'Tự động tắt máy bơm sau khi tưới xong (5 giây).');
         }
-        
+
         if (waterAdd > 0) {
           const now = new Date();
           const vnDate = new Date(now.getTime() + 7 * 3600000);
           const dateStr = vnDate.toISOString().slice(0, 10);
-          
+
           await DailyWater.findOneAndUpdate(
             { date: dateStr },
             { $inc: { amount_ml: waterAdd } },
@@ -489,7 +442,7 @@ async function syncFirebaseToMongo() {
           );
           console.log(`>>> [Daily Water] +${waterAdd}ml cho ngày ${dateStr}`);
         }
-        
+
         lastSyncPump = currentPump;
       }
 
@@ -501,80 +454,6 @@ async function syncFirebaseToMongo() {
           await saveActivityLogBackend('light_off', 'Tắt đèn LED tự động', `Cường độ sáng cao (${Math.round(lux !== undefined ? lux : 0)} Lux). Tắt đèn tự động.`);
         }
         lastSyncLight = currentLight;
-=======
-      if (currentPump !== lastPumpStatus) {
-        let msg = '';
-        if (currentPump === 'ON_AUTO') {
-          msg = `Máy bơm đã bật tự động do đất khô (Độ ẩm: ${Math.max(0, Math.min(100, Math.round(((4095 - (soil_raw !== undefined ? soil_raw : 4095)) / 4095) * 100)))}%).`;
-        } else if (currentPump === 'ON_MANUAL') {
-          msg = 'Máy bơm đã được bật thủ công từ ứng dụng.';
-        } else if (currentPump === 'OFF') {
-          if (lastPumpStatus === 'ON_AUTO') {
-            msg = 'Máy bơm đã tắt tự động sau khi hoàn thành chu kỳ tưới.';
-          } else {
-            msg = 'Máy bơm đã được tắt.';
-          }
-        }
-        
-        if (msg) {
-          const actLog = new ActivityLog({
-            type: 'pump',
-            status: currentPump,
-            message: msg
-          });
-          await actLog.save();
-          console.log(`[Activity Log] ${msg}`);
-        }
-        lastPumpStatus = currentPump;
-      }
-
-      // 2. Đèn LED
-      if (currentLight !== lastLightStatus) {
-        let msg = '';
-        if (currentLight === 'ON_AUTO') {
-          msg = `Đèn LED tự động bật do cường độ sáng thấp (${Math.round(lux !== undefined ? lux : 0)} Lux).`;
-        } else if (currentLight === 'ON_MANUAL') {
-          msg = 'Đèn LED đã được bật thủ công từ ứng dụng.';
-        } else if (currentLight === 'OFF') {
-          if (lastLightStatus === 'ON_AUTO') {
-            msg = `Đèn LED tự động tắt khi trời sáng (${Math.round(lux !== undefined ? lux : 0)} Lux).`;
-          } else {
-            msg = 'Đèn LED đã được tắt.';
-          }
-        }
-        
-        if (msg) {
-          const actLog = new ActivityLog({
-            type: 'light',
-            status: currentLight,
-            message: msg
-          });
-          await actLog.save();
-          console.log(`[Activity Log] ${msg}`);
-        }
-        lastLightStatus = currentLight;
-      }
-
-      // 3. Mực nước
-      if (currentWater !== lastWaterStatus && currentWater !== 'UNKNOWN') {
-        let msg = '';
-        if (currentWater === 'HET_NUOC') {
-          msg = 'Cảnh báo: Bể hết nước! Máy bơm đã tự động ngắt để bảo vệ.';
-        } else if (currentWater === 'CON_NUOC') {
-          msg = 'Bể đã được châm thêm nước đầy đủ.';
-        }
-        
-        if (msg) {
-          const actLog = new ActivityLog({
-            type: 'water',
-            status: currentWater,
-            message: msg
-          });
-          await actLog.save();
-          console.log(`[Activity Log] ${msg}`);
-        }
-        lastWaterStatus = currentWater;
->>>>>>> 8ef5c97147c831e4bea67037c8041cc2feb53dfd
       }
 
       // Tạo bản ghi log mới
@@ -585,7 +464,7 @@ async function syncFirebaseToMongo() {
         pump_status: currentPump,
         light_status: currentLight
       });
-      
+
       await newLog.save();
       console.log(`[${new Date().toLocaleTimeString()}] Đồng bộ thành công: soil_raw=${soil_raw}, lux=${lux}, water=${currentWater}, pump=${currentPump}, light=${currentLight}`);
     } else {
@@ -614,12 +493,12 @@ app.get('/api/monthly-summary', async (req, res) => {
 
     // Khoảng ngày tháng này và tháng trước
     const thisMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
-    const thisMonthEnd   = `${year}-${String(month).padStart(2, '0')}-31`;
+    const thisMonthEnd = `${year}-${String(month).padStart(2, '0')}-31`;
 
-    const prevMonthNum  = month === 1 ? 12 : month - 1;
+    const prevMonthNum = month === 1 ? 12 : month - 1;
     const prevMonthYear = month === 1 ? year - 1 : year;
     const prevMonthStart = `${prevMonthYear}-${String(prevMonthNum).padStart(2, '0')}-01`;
-    const prevMonthEnd   = `${prevMonthYear}-${String(prevMonthNum).padStart(2, '0')}-31`;
+    const prevMonthEnd = `${prevMonthYear}-${String(prevMonthNum).padStart(2, '0')}-31`;
 
     // 1. Lượng nước tháng này và tháng trước
     const [thisWater, prevWater] = await Promise.all([
@@ -827,28 +706,28 @@ app.post('/api/alert/water-low', async (req, res) => {
 // Schema & API: Lịch bảo trì (maintenance_schedules)
 // ══════════════════════════════════════════════
 const maintenanceSchema = new mongoose.Schema({
-  datetime:        { type: Date },                    // Dùng cho lịch một lần
-  category:        { type: String, required: true },   // soil | fertilizer | prune | tùy chỉnh
-  recurrence:      { type: String, default: 'once' }, // 'once' | 'weekly' | 'monthly'
-  daysOfWeek:      { type: [Number], default: [] },   // [0..6] dùng cho weekly
-  dayOfMonth:      { type: Number },                  // 1..28 dùng cho monthly
-  time:            { type: String },                  // 'HH:MM' dùng cho weekly/monthly
-  notified:        { type: Boolean, default: false }, // Đã gửi (lịch một lần)
-  lastNotifiedAt:  { type: Date },                    // Lần gửi cuối (lịch lặp lại)
-  created_at:      { type: Date, default: Date.now }
+  datetime: { type: Date },                    // Dùng cho lịch một lần
+  category: { type: String, required: true },   // soil | fertilizer | prune | tùy chỉnh
+  recurrence: { type: String, default: 'once' }, // 'once' | 'weekly' | 'monthly'
+  daysOfWeek: { type: [Number], default: [] },   // [0..6] dùng cho weekly
+  dayOfMonth: { type: Number },                  // 1..28 dùng cho monthly
+  time: { type: String },                  // 'HH:MM' dùng cho weekly/monthly
+  notified: { type: Boolean, default: false }, // Đã gửi (lịch một lần)
+  lastNotifiedAt: { type: Date },                    // Lần gửi cuối (lịch lặp lại)
+  created_at: { type: Date, default: Date.now }
 });
 const Maintenance = mongoose.model('Maintenance', maintenanceSchema, 'maintenance_schedules');
 
 const MAINT_LABELS = {
-  soil:       'Thay đất mới',
+  soil: 'Thay đất mới',
   fertilizer: 'Bón phân dinh dưỡng',
-  prune:      'Tỉa lá & Vệ sinh',
+  prune: 'Tỉa lá & Vệ sinh',
 };
 
 const MAINT_TIPS = {
-  soil:       'Hãy chuẩn bị đất cát pha trộn sẵn, gỡ nhẹ cây ra khỏi chậu, rũ bỏ đất cũ bám rễ, và trồng lại vào đất mới tơi xốp.',
+  soil: 'Hãy chuẩn bị đất cát pha trộn sẵn, gỡ nhẹ cây ra khỏi chậu, rũ bỏ đất cũ bám rễ, và trồng lại vào đất mới tơi xốp.',
   fertilizer: 'Sử dụng phân bón loãng chuyên dụng cho xương rồng/sen đá, tưới nhẹ sau khi bón để phân thấm đều vào đất.',
-  prune:      'Dùng kéo sạch cắt bỏ lá úa và hư, lau sạch bề mặt lá bằng khăn ẩm mềm, kiểm tra dấu hiệu sâu bệnh.',
+  prune: 'Dùng kéo sạch cắt bỏ lá úa và hư, lau sạch bề mặt lá bằng khăn ẩm mềm, kiểm tra dấu hiệu sâu bệnh.',
 };
 
 // GET /api/maintenance – Lấy danh sách lịch bảo trì
@@ -874,8 +753,8 @@ app.post('/api/maintenance', async (req, res) => {
   try {
     const entryData = { category, recurrence };
     if (recurrence === 'once') entryData.datetime = new Date(datetime);
-    if (recurrence === 'weekly')  { entryData.daysOfWeek = daysOfWeek || []; entryData.time = time || '08:00'; }
-    if (recurrence === 'monthly') { entryData.dayOfMonth = dayOfMonth || 1;  entryData.time = time || '08:00'; }
+    if (recurrence === 'weekly') { entryData.daysOfWeek = daysOfWeek || []; entryData.time = time || '08:00'; }
+    if (recurrence === 'monthly') { entryData.dayOfMonth = dayOfMonth || 1; entryData.time = time || '08:00'; }
 
     const entry = new Maintenance(entryData);
     await entry.save();
@@ -930,10 +809,10 @@ async function sendMaintenanceReminderEmail(entry, scheduleDesc) {
         return true;
       }
     }
-  } catch (e) {}
+  } catch (e) { }
 
   const label = MAINT_LABELS[entry.category] || entry.category;
-  const tip   = MAINT_TIPS[entry.category]   || 'Hãy kiểm tra và thực hiện bảo trì theo kế hoạch.';
+  const tip = MAINT_TIPS[entry.category] || 'Hãy kiểm tra và thực hiện bảo trì theo kế hoạch.';
   const timeStr = scheduleDesc || new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
 
   const catColor = entry.category === 'soil' ? '#A07C5A' : entry.category === 'fertilizer' ? '#88AB75' : '#78C0ED';
@@ -988,8 +867,8 @@ async function checkMaintenanceSchedules() {
     // Giờ Việt Nam (UTC+7)
     const vnNow = new Date(now.getTime() + 7 * 3600000);
     const vnHHMM = vnNow.toISOString().slice(11, 16); // 'HH:MM'
-    const vnDOW  = vnNow.getUTCDay();                  // 0=CN..6=T7
-    const vnDOM  = vnNow.getUTCDate();                 // 1..31
+    const vnDOW = vnNow.getUTCDay();                  // 0=CN..6=T7
+    const vnDOM = vnNow.getUTCDate();                 // 1..31
     const vnDateStr = vnNow.toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
     const allEntries = await Maintenance.find({});
@@ -1009,7 +888,7 @@ async function checkMaintenanceSchedules() {
       } else if (recur === 'weekly') {
         // ─ Hàng tuần: kiểm tra ngày trong tuần + giờ khớp
         const entryTime = (entry.time || '08:00').trim();
-        const inDay  = (entry.daysOfWeek || []).includes(vnDOW);
+        const inDay = (entry.daysOfWeek || []).includes(vnDOW);
         const inTime = vnHHMM === entryTime;
         // Kiểm tra chưa gửi hôm nay
         const alreadySentToday = entry.lastNotifiedAt &&
@@ -1017,13 +896,13 @@ async function checkMaintenanceSchedules() {
 
         if (inDay && inTime && !alreadySentToday) {
           shouldFire = true;
-          const DOW_NAMES = ['Chủ Nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
+          const DOW_NAMES = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
           scheduleDesc = `Hàng tuần (${DOW_NAMES[vnDOW]}) lúc ${entryTime}`;
         }
       } else if (recur === 'monthly') {
         // ─ Hàng tháng: kiểm tra ngày trong tháng + giờ khớp
         const entryTime = (entry.time || '08:00').trim();
-        const inDay  = entry.dayOfMonth === vnDOM;
+        const inDay = entry.dayOfMonth === vnDOM;
         const inTime = vnHHMM === entryTime;
         // Kiểm tra chưa gửi tháng này (so sánh YYYY-MM)
         const alreadySentThisMonth = entry.lastNotifiedAt &&
@@ -1072,7 +951,7 @@ app.get('/api/export/data', async (req, res) => {
     const sensorLogs = await SensorLog.find().sort({ timestamp: -1 });
     const dailyWater = await DailyWater.find().sort({ date: -1 });
     const activityDocs = await ActivityLog.find().sort({ date: -1 });
-    
+
     const activityLogs = [];
     for (const doc of activityDocs) {
       const cats = ['den', 'bom', 'canh_bao', 'lich'];
@@ -1107,7 +986,7 @@ app.get('/api/export/excel', async (req, res) => {
     const sensorLogs = await SensorLog.find().sort({ timestamp: -1 });
     const dailyWater = await DailyWater.find().sort({ date: -1 });
     const activityDocs = await ActivityLog.find().sort({ date: -1 });
-    
+
     // Định dạng Sheet 1: Nhật ký Cảm biến
     const sensorData = sensorLogs.map((log, index) => {
       const date = new Date(log.timestamp);
@@ -1149,7 +1028,7 @@ app.get('/api/export/excel', async (req, res) => {
         }
       }
     }
-    
+
     // Sắp xếp activityData theo Ngày và Giờ giảm dần
     activityData.sort((a, b) => {
       const dateA = a['Ngày'].split('/').reverse().join('-');
@@ -1192,18 +1071,18 @@ async function cleanupOldData() {
     const daysLimit = 65;
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysLimit);
-    
+
     // Chuỗi định dạng YYYY-MM-DD cho daily_water và activity_logs
     const cutoffStr = cutoffDate.toISOString().slice(0, 10);
-    
+
     console.log(`>>> [Cleanup] Bắt đầu dọn dẹp dữ liệu cũ hơn ${daysLimit} ngày (trước ngày ${cutoffStr})...`);
 
     // 1. Xóa trong sensor_logs (dùng timestamp)
     const sensorDel = await SensorLog.deleteMany({ timestamp: { $lt: cutoffDate } });
-    
+
     // 2. Xóa trong daily_water (dùng date string YYYY-MM-DD)
     const waterDel = await DailyWater.deleteMany({ date: { $lt: cutoffStr } });
-    
+
     // 3. Xóa trong activity_logs (dùng date string YYYY-MM-DD)
     const activityDel = await ActivityLog.deleteMany({ date: { $lt: cutoffStr } });
 
