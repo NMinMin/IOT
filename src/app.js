@@ -1,4 +1,5 @@
 import Chart from 'chart.js/auto';
+import { t } from './locales.js';
 
 // Cấu hình kết nối Firebase và Backend Local
 const FIREBASE_DB_URL = "https://smart-green-house-iot-default-rtdb.asia-southeast1.firebasedatabase.app/";
@@ -76,9 +77,18 @@ function formatLogTime(dateStr, timeStr) {
   const todayStr = new Date().toLocaleDateString('sv-SE');
   const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
   if (dateStr === todayStr) return timeStr;
-  if (dateStr === yesterdayStr) return `Hôm qua ${timeStr}`;
+  if (dateStr === yesterdayStr) return `${t('yesterday_label')} ${timeStr}`;
   const [y, m, d] = dateStr.split('-');
   return `${d}/${m} ${timeStr}`;
+}
+
+function formatLogDateHeader(dateStr) {
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
+  if (dateStr === todayStr) return t('today_header');
+  if (dateStr === yesterdayStr) return t('yesterday_header');
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 export function addActivityLog(type, title, desc) {
@@ -87,6 +97,7 @@ export function addActivityLog(type, title, desc) {
     light_on: 'den', light_off: 'den',
     water_auto: 'bom', water_manual: 'bom', pump_off: 'bom',
     water_low: 'canh_bao', emergency: 'canh_bao',
+    schedule: 'lich',
   };
   const cat = CAT_MAP[type] || 'canh_bao';
   const now  = new Date();
@@ -98,7 +109,7 @@ export function addActivityLog(type, title, desc) {
   const store = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
   let dayDoc  = store.find(d => d.date === dateStr);
   if (!dayDoc) {
-    dayDoc = { date: dateStr, den: [], bom: [], canh_bao: [] };
+    dayDoc = { date: dateStr, den: [], bom: [], canh_bao: [], lich: [] };
     store.unshift(dayDoc);
   }
   dayDoc[cat].unshift({ time: timeStr, action });
@@ -137,9 +148,17 @@ export async function loadMoreLogs(category, append = false) {
         return;
       }
 
-      const html = data.map(e => {
-        // Lấy category thực tế của entry (nếu query là 'all' thì backend trả về e.category)
+      // Group the fetched logs by date
+      const grouped = {};
+      data.forEach(e => {
         const itemCat = e.category || category;
+        if (!grouped[e.date]) {
+          grouped[e.date] = [];
+        }
+        grouped[e.date].push({ item: e, category: itemCat });
+      });
+
+      const renderLogItemHTML = (e, itemCat) => {
         let icon = 'sun';
         let color = 'yellow';
         if (itemCat === 'bom') {
@@ -148,27 +167,89 @@ export async function loadMoreLogs(category, append = false) {
         } else if (itemCat === 'canh_bao') {
           icon = 'alert-triangle';
           color = 'red';
+        } else if (itemCat === 'lich') {
+          icon = 'calendar';
+          color = 'green';
+        }
+
+        let title = e.action;
+        let desc = '';
+        const idx = e.action.indexOf(' – ');
+        const idx2 = e.action.indexOf(' - ');
+        if (idx !== -1) {
+          title = e.action.substring(0, idx);
+          desc = e.action.substring(idx + 3);
+        } else if (idx2 !== -1) {
+          title = e.action.substring(0, idx2);
+          desc = e.action.substring(idx2 + 3);
         }
 
         return `
-          <div class="log-item">
+          <div class="log-item" style="cursor:pointer;" data-title="${title.replace(/"/g, '&quot;')}" data-desc="${desc.replace(/"/g, '&quot;')}" data-date="${e.date}" data-time="${e.time}" data-cat="${itemCat}">
             <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
               <div class="log-icon ${color}"><i data-lucide="${icon}"></i></div>
               <div class="log-info" style="font-size:13px; color:var(--dark-green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${e.action}</strong></div>
             </div>
-            <span class="log-time" style="font-size:11px; color:#8A968C; flex-shrink:0;">${formatLogTime(e.date, e.time)}</span>
+            <span class="log-time" style="font-size:11px; color:#8A968C; flex-shrink:0;">${e.time}</span>
           </div>
         `;
-      }).join('');
+      };
 
-      if (append) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        while (tempDiv.firstChild) {
-          container.appendChild(tempDiv.firstChild);
-        }
+      if (!append) {
+        container.innerHTML = '';
+        let isFirst = true;
+        Object.keys(grouped).forEach(dateStr => {
+          const groupItems = grouped[dateStr];
+          const groupDiv = document.createElement('div');
+          groupDiv.className = `log-day-group${isFirst ? ' first' : ''}`;
+          groupDiv.dataset.date = dateStr;
+          isFirst = false;
+
+          const headerHTML = `
+            <div class="log-day-header">
+              <span>${formatLogDateHeader(dateStr)}</span>
+              <span class="log-day-count">${groupItems.length} ${t('stats_activities_count')}</span>
+            </div>
+          `;
+          
+          const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
+          groupDiv.innerHTML = headerHTML + itemsHTML;
+          container.appendChild(groupDiv);
+        });
       } else {
-        container.innerHTML = html;
+        Object.keys(grouped).forEach(dateStr => {
+          const groupItems = grouped[dateStr];
+          let existingGroup = container.querySelector(`.log-day-group[data-date="${dateStr}"]`);
+          
+          if (existingGroup) {
+            const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = itemsHTML;
+            while (tempDiv.firstChild) {
+              existingGroup.appendChild(tempDiv.firstChild);
+            }
+            const countEl = existingGroup.querySelector('.log-day-count');
+            if (countEl) {
+              const currentCount = existingGroup.querySelectorAll('.log-item').length;
+              countEl.textContent = `${currentCount} ${t('stats_activities_count')}`;
+            }
+          } else {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'log-day-group';
+            groupDiv.dataset.date = dateStr;
+
+            const headerHTML = `
+              <div class="log-day-header">
+                <span>${formatLogDateHeader(dateStr)}</span>
+                <span class="log-day-count">${groupItems.length} ${t('stats_activities_count')}</span>
+              </div>
+            `;
+            
+            const itemsHTML = groupItems.map(g => renderLogItemHTML(g.item, g.category)).join('');
+            groupDiv.innerHTML = headerHTML + itemsHTML;
+            container.appendChild(groupDiv);
+          }
+        });
       }
 
       if (typeof lucide !== 'undefined') {
@@ -277,6 +358,9 @@ export function goTo(page) {
   // Lazy init charts
   if (page === 'dashboard')  initHealthChart();
   if (page === 'statistics') { initStatChart(); initWaterChart(); renderActivityLog(); renderMonthlySummary(); }
+  if (page === 'schedule') {
+    if (window.__initSchedulePage) window.__initSchedulePage();
+  }
 
   // Animate tank
   if (page === 'dashboard') {
@@ -307,14 +391,15 @@ function updateHeader(page) {
   weather?.classList.remove('hidden');
 
   const map = {
-    dashboard:  ['Vườn Sen Đá Của Tôi',     'Chào buổi sáng, người làm vườn! <img src="./Vector.svg" class="icon-plant" alt="Plant"/>'],
-    statistics: ['<i data-lucide="trending-up"></i> Thống Kê & Lịch Sử',    'Theo dõi sự phát triển của vườn nhỏ <i data-lucide="clipboard-list"></i>'],
-    settings:   ['<i data-lucide="settings"></i> Cài Đặt & Thông Báo',  'Chăm sóc vườn theo cách của bạn <img src="./Vector.svg" class="icon-plant" alt="Plant"/>'],
+    dashboard:  [t('login_title'), t('hdr_sub_dashboard')],
+    statistics: [`<i data-lucide="trending-up"></i> ${t('stats_title')}`, t('hdr_sub_statistics')],
+    schedule:   [`<i data-lucide="calendar"></i> ${t('schedule_title')}`, t('hdr_sub_schedule')],
+    settings:   [`<i data-lucide="settings"></i> ${t('settings_title')}`, t('hdr_sub_settings')],
   };
 
-  const [t, s] = map[page] || map.dashboard;
-  if (title) title.innerHTML = t;
-  if (sub)   sub.innerHTML   = s;
+  const [hdrTitle, hdrSub] = map[page] || map.dashboard;
+  if (title) title.innerHTML = hdrTitle;
+  if (sub)   sub.innerHTML   = hdrSub;
 
   if (page !== 'dashboard') {
     btnBack?.classList.remove('hidden');
@@ -346,9 +431,9 @@ export function setWaterValue(val, min = 0, max = 100) {
   if (pctEl) pctEl.textContent = pct + '%';
   
   if (subEl) {
-    if (pct < 20) subEl.textContent = 'Thấp';
-    else if (pct < 75) subEl.textContent = 'Ổn định';
-    else subEl.textContent = 'Đầy';
+    if (pct < 20) subEl.textContent = t('water_tank_low');
+    else if (pct < 75) subEl.textContent = t('water_tank_stable');
+    else subEl.textContent = t('water_tank_full');
   }
 
   // Cập nhật mục lưu ý: Bể 500ml = 100% -> 1% = 5ml
@@ -357,10 +442,10 @@ export function setWaterValue(val, min = 0, max = 100) {
     const neededMl = (100 - pct) * 5;
     if (neededMl <= 0) {
       tankNote.classList.add('full');
-      tankNote.innerHTML = `Bể nước đã đầy.`;
+      tankNote.innerHTML = t('water_tank_note_full');
     } else {
       tankNote.classList.remove('full');
-      tankNote.innerHTML = `<strong>LƯU Ý</strong> Cần thêm ${neededMl} ml để đầy bể.`;
+      tankNote.innerHTML = t('water_tank_note').replace('{ml}', neededMl);
     }
   }
 
@@ -369,7 +454,7 @@ export function setWaterValue(val, min = 0, max = 100) {
   if (alertWaterLow) {
     const alertSpan = alertWaterLow.querySelector('span');
     if (alertSpan) {
-      alertSpan.textContent = `Bể nước chỉ còn ${pct}% - Vui lòng châm thêm.`;
+      alertSpan.textContent = t('alert_water_low_sub').replace('{pct}', pct);
     }
   }
 }
@@ -383,6 +468,7 @@ export function startSensorSim() {
 /* ── Dark mode ── */
 export function toggleDark(checked) {
   document.body.classList.toggle('dark', checked);
+  localStorage.setItem('darkMode', checked ? '1' : '0');
 }
 
 /* ── Slider labels ── */
@@ -604,6 +690,42 @@ function updateUIFromFirebaseState() {
   }
   if (lightManualSw && state.control.light_manual !== undefined) {
     lightManualSw.checked = state.control.light_manual;
+  }
+
+  // Cập nhật trạng thái nút Dừng khẩn cấp
+  const btnEmergency = document.getElementById('btn-emergency');
+  if (btnEmergency && state.control && state.control.emergency !== undefined) {
+    const isEmergency = state.control.emergency === true;
+    btnEmergency.classList.toggle('active', isEmergency);
+    btnEmergency.textContent = isEmergency ? 'KHÔI PHỤC HỆ THỐNG' : 'DỪNG NGAY';
+    
+    // Cập nhật giao diện của nút và card tương ứng
+    const emrgCard = btnEmergency.closest('.emrg-card');
+    if (isEmergency) {
+      btnEmergency.style.background = 'var(--primary-green)';
+      btnEmergency.style.color = 'white';
+      btnEmergency.style.borderColor = 'var(--primary-green)';
+      if (emrgCard) {
+        emrgCard.style.background = '#FEE2E2';
+        emrgCard.style.borderColor = 'var(--red-alert)';
+      }
+      if (!window._emergencyToastShown) {
+        window._emergencyToastShown = true;
+        showFancyToast('Dừng khẩn cấp', 'Hệ thống đã ngắt toàn bộ đèn và máy bơm khẩn cấp!', 'error', 5000);
+      }
+    } else {
+      btnEmergency.style.background = '';
+      btnEmergency.style.color = '';
+      btnEmergency.style.borderColor = '';
+      if (emrgCard) {
+        emrgCard.style.background = '';
+        emrgCard.style.borderColor = '';
+      }
+      if (window._emergencyToastShown) {
+        window._emergencyToastShown = false;
+        showFancyToast('Hệ thống khôi phục', 'Hệ thống đã sẵn sàng hoạt động trở lại.', 'success', 3500);
+      }
+    }
   }
 
   // 4. Cập nhật thanh trượt Settings
@@ -892,16 +1014,25 @@ async function initWaterChart() {
 
   const totalLiters = usageData.reduce((a, b) => a + b, 0).toFixed(2);
   const totalPill = document.querySelector('#page-statistics .pill span');
+  const currentLang = localStorage.getItem('language') || 'vi';
   if (totalPill) {
-    totalPill.textContent = `Tổng: ${totalLiters} Lít/Tuần`;
+    totalPill.textContent = t('stats_total_week').replace('{val}', totalLiters);
   }
 
   waterChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: ['Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7','Chủ Nhật'],
+      labels: [
+        t('dow_mon'),
+        t('dow_tue'),
+        t('dow_wed'),
+        t('dow_thu'),
+        t('dow_fri'),
+        t('dow_sat'),
+        t('dow_sun')
+      ],
       datasets: [{
-        label: 'Lít', data: usageData,
+        label: currentLang === 'vi' ? 'Lít' : 'Liters', data: usageData,
         backgroundColor: 'rgba(123,191,232,.75)', borderColor: '#7bbfe8',
         borderWidth: 2, borderRadius: 8, borderSkipped: false
       }]
@@ -910,11 +1041,11 @@ async function initWaterChart() {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { ...tooltipStyle(), callbacks: { label: i => ` ${i.formattedValue} lít` } }
+        tooltip: { ...tooltipStyle(), callbacks: { label: i => ` ${i.formattedValue} ${currentLang === 'vi' ? 'lít' : 'liters'}` } }
       },
       scales: {
         x: { grid: { display: false }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#8fa090' } },
-        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#8fa090', callback: v => v+' L' } }
+        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' }, ticks: { font: { family: 'Be Vietnam Pro', size: 10 }, color: '#8fa090', callback: v => v + (currentLang === 'vi' ? ' L' : ' L') } }
       }
     }
   });
@@ -989,7 +1120,7 @@ function _paintPumpLogs(container, days) {
   const daysWithPump = days.filter(day => Array.isArray(day.bom) && day.bom.length > 0);
   
   if (daysWithPump.length === 0) {
-    container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có lịch sử hoạt động máy bơm.</p>';
+    container.innerHTML = `<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">${t('stats_no_activity')}</p>`;
     return;
   }
 
@@ -997,8 +1128,8 @@ function _paintPumpLogs(container, days) {
   const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
 
   function dayLabel(dateStr) {
-    if (dateStr === todayStr)     return 'Hôm nay';
-    if (dateStr === yesterdayStr) return 'Hôm qua';
+    if (dateStr === todayStr)     return t('today_header');
+    if (dateStr === yesterdayStr) return t('yesterday_label');
     const [y, m, d] = dateStr.split('-');
     return `${d}/${m}/${y}`;
   }
@@ -1006,22 +1137,22 @@ function _paintPumpLogs(container, days) {
   container.innerHTML = daysWithPump.map(day => {
     const rows = day.bom.map(e => {
       // Phân biệt tự động/thủ công/tắt
-      const isAuto = e.action.toLowerCase().includes('tự động');
-      const isOff  = e.action.toLowerCase().includes('tắt') || e.action.toLowerCase().includes('ngắt');
+      const isAuto = e.action.toLowerCase().includes('tự động') || e.action.toLowerCase().includes('auto');
+      const isOff  = e.action.toLowerCase().includes('tắt') || e.action.toLowerCase().includes('ngắt') || e.action.toLowerCase().includes('off');
       
       let badgeClass = 'manual';
-      let badgeText  = 'Thủ công';
+      let badgeText  = t('pump_manual');
       let iconClass  = 'manual';
       let iconName   = 'droplet';
 
       if (isAuto) {
         badgeClass = 'auto';
-        badgeText  = 'Tự động';
+        badgeText  = t('pump_auto');
         iconClass  = 'auto';
         iconName   = 'cpu';
       } else if (isOff) {
         badgeClass = 'off';
-        badgeText  = 'Tắt';
+        badgeText  = t('pump_off');
         iconClass  = 'off';
         iconName   = 'power';
       }
@@ -1075,7 +1206,7 @@ export async function renderMonthlySummary() {
     monthEl.textContent = new Date().getMonth() + 1;
     luxEl.textContent   = '--';
     pumpEl.textContent  = '--';
-    waterEl.textContent = 'Chưa có dữ liệu';
+    waterEl.textContent = t('stats_no_prev_data');
     return;
   }
 
@@ -1088,20 +1219,20 @@ export async function renderMonthlySummary() {
     : '--';
 
   // Số lần tưới tự động
-  pumpEl.textContent = `${summary.auto_pump_count} lần`;
+  pumpEl.textContent = `${summary.auto_pump_count} ${t('stats_times')}`;
 
   // Tiết kiệm nước so với tháng trước
   if (summary.water_saving_pct === null) {
-    waterEl.textContent = 'Chưa có dữ liệu so sánh';
+    waterEl.textContent = t('stats_no_prev_data');
     waterEl.style.color = '#8A968C';
     waterEl.style.fontSize = '12px';
   } else {
     const pct = summary.water_saving_pct;
     if (pct >= 0) {
-      waterEl.textContent = `+${pct}% (tiết kiệm hơn tháng trước)`;
+      waterEl.textContent = t('stats_saving_more').replace('{val}', pct);
       waterEl.style.color = 'var(--primary-green)';
     } else {
-      waterEl.textContent = `${pct}% (dùng nhiều hơn tháng trước)`;
+      waterEl.textContent = t('stats_saving_less').replace('{val}', pct);
       waterEl.style.color = 'var(--red-alert, #e74c3c)';
     }
     waterEl.style.fontSize = '12px';
@@ -1120,10 +1251,280 @@ export async function loadUserProfile(username) {
       const emailEl = document.getElementById('profile-display-email');
       if (nameEl) nameEl.textContent = data.username || username;
       if (emailEl) emailEl.textContent = data.email || 'Chưa thiết lập email';
+      
+      const emailToggle = document.getElementById('email-notification-toggle');
+      if (emailToggle) {
+        emailToggle.checked = data.emailAlertEnabled !== false;
+      }
+      
       return data;
     }
   } catch (err) {
     console.error('Lỗi khi tải thông tin hồ sơ:', err);
+  }
+}
+
+export function exportToExcel() {
+  window.location.href = `${BACKEND_URL}/api/export/excel`;
+}
+
+export async function exportToPDF() {
+  const currentLang = localStorage.getItem('language') || 'vi';
+  showToast('<i data-lucide="loader" class="animate-spin" style="width:18px;height:18px"></i> ' + t('toast_generating_pdf'));
+  
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/export/data`);
+    if (!res.ok) throw new Error('Không thể tải dữ liệu xuất.');
+    const data = await res.json();
+    
+    // Mở cửa sổ in ấn mới
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert(t('toast_popup_blocked'));
+      return;
+    }
+
+    const sensorRows = data.sensorLogs.map((log, index) => {
+      const date = new Date(log.timestamp);
+      const formattedTime = date.toLocaleString(currentLang === 'vi' ? 'vi-VN' : 'en-US', { timeZone: 'Asia/Ho_Chi_Minh' });
+      const humPercent = Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100)));
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${formattedTime}</td>
+          <td>${Math.round(log.lux || 0)} Lux</td>
+          <td>${humPercent}%</td>
+          <td>${log.water_status === 'HET_NUOC' ? `<span class="badge badge-danger">${t('status_empty_water')}</span>` : t('status_normal')}</td>
+          <td>${log.pump_status}</td>
+          <td>${log.light_status}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const waterRows = data.dailyWater.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.date.split('-').reverse().join('/')}</td>
+        <td>${(item.amount_ml / 1000).toFixed(3)} ${currentLang === 'vi' ? 'Lít' : 'Liters'}</td>
+      </tr>
+    `).join('');
+
+    const activityRows = data.activityLogs.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${item.date.split('-').reverse().join('/')}</td>
+        <td>${item.time}</td>
+        <td>${item.category}</td>
+        <td>${item.action}</td>
+      </tr>
+    `).join('');
+
+    // HTML cho trang in
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${t('print_title')}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+          body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            color: #2c3e2d;
+            background: #ffffff;
+            margin: 0;
+            padding: 30px;
+            line-height: 1.5;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 3px double #4A5B4C;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header h1 {
+            color: #4A5B4C;
+            font-size: 26px;
+            margin: 0 0 10px;
+          }
+          .header p {
+            color: #8A968C;
+            font-size: 14px;
+            margin: 0;
+          }
+          h2 {
+            color: #4A5B4C;
+            font-size: 18px;
+            border-left: 5px solid #88AB75;
+            padding-left: 10px;
+            margin: 30px 0 15px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            font-size: 13px;
+          }
+          th, td {
+            border: 1px solid #d4e9c8;
+            padding: 10px;
+            text-align: left;
+          }
+          th {
+            background-color: #f6f7f0;
+            color: #4A5B4C;
+            font-weight: 600;
+          }
+          tr:nth-child(even) {
+            background-color: #fbfcf9;
+          }
+          .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+          }
+          .summary-card {
+            border: 1.5px solid #d4e9c8;
+            border-radius: 12px;
+            padding: 16px;
+            background: #fbfcf9;
+            text-align: center;
+          }
+          .summary-card span {
+            display: block;
+            font-size: 11px;
+            color: #8a968c;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 6px;
+          }
+          .summary-card strong {
+            font-size: 18px;
+            color: #4A5B4C;
+          }
+          .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+          }
+          .badge-danger {
+            background: #FEE2E2;
+            color: #EF4444;
+          }
+          .footer {
+            margin-top: 50px;
+            text-align: right;
+            font-size: 12px;
+            color: #8a968c;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+            .no-print {
+              display: none;
+            }
+            tr {
+              page-break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${t('print_title')}</h1>
+          <p>${t('print_sub').replace('{time}', new Date().toLocaleString(currentLang === 'vi' ? 'vi-VN' : 'en-US'))}</p>
+        </div>
+
+        <div class="summary-cards">
+          <div class="summary-card">
+            <span>${t('print_summary_sensor')}</span>
+            <strong>${data.sensorLogs.length} ${currentLang === 'vi' ? 'bản ghi' : 'records'}</strong>
+          </div>
+          <div class="summary-card">
+            <span>${t('print_summary_water')}</span>
+            <strong>${data.dailyWater.reduce((acc, curr) => acc + (curr.amount_ml / 1000), 0).toFixed(2)} ${currentLang === 'vi' ? 'Lít' : 'Liters'}</strong>
+          </div>
+          <div class="summary-card">
+            <span>${t('print_summary_activity')}</span>
+            <strong>${data.activityLogs.length} ${currentLang === 'vi' ? 'sự kiện' : 'events'}</strong>
+          </div>
+          <div class="summary-card">
+            <span>${t('print_summary_status')}</span>
+            <strong>${data.sensorLogs[0]?.water_status === 'HET_NUOC' ? `${t('status_empty_water')} ⚠️` : `${t('status_normal')} ✅`}</strong>
+          </div>
+        </div>
+
+        <h2>1. ${currentLang === 'vi' ? 'Lịch sử hoạt động của thiết bị & Cảnh báo' : 'Device Activity History & Alerts'}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">${t('print_col_index')}</th>
+              <th style="width: 100px;">${t('print_col_date')}</th>
+              <th style="width: 80px;">${t('print_col_time')}</th>
+              <th style="width: 120px;">${t('print_col_category')}</th>
+              <th>${t('print_col_action_detail')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${activityRows || `<tr><td colspan="5" style="text-align:center;">${t('print_log_empty')}</td></tr>`}
+          </tbody>
+        </table>
+
+        <h2>2. ${currentLang === 'vi' ? 'Lịch sử Tiêu thụ Nước hàng ngày' : 'Daily Water Consumption History'}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 80px;">${t('print_col_index')}</th>
+              <th>${t('print_col_date')}</th>
+              <th>${t('print_col_water_amount')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${waterRows || `<tr><td colspan="3" style="text-align:center;">${t('print_water_empty')}</td></tr>`}
+          </tbody>
+        </table>
+
+        <div style="page-break-before: always;"></div>
+
+        <h2>3. ${currentLang === 'vi' ? 'Lịch sử chi tiết thông số cảm biến' : 'Detailed Sensor Readings History'}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">${t('print_col_index')}</th>
+              <th>${t('print_col_sensor_time')}</th>
+              <th>${t('print_col_lux')}</th>
+              <th>${t('print_col_soil')}</th>
+              <th>${t('print_col_water_low')}</th>
+              <th>${t('print_col_pump_status')}</th>
+              <th>${t('print_col_light_status')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sensorRows || `<tr><td colspan="7" style="text-align:center;">${t('print_sensor_empty')}</td></tr>`}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>${t('print_footer')}</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  } catch (error) {
+    console.error('Lỗi khi xuất PDF:', error);
+    alert(t('print_pdf_error'));
   }
 }
 

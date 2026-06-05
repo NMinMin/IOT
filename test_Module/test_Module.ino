@@ -44,6 +44,7 @@ int soilMax = 1500;        // Ngưỡng dừng tưới (Đất ẩm -> raw giả
 float luxMin = 200.0;      // Ngưỡng bật đèn khi trời tối
 bool pumpManual = false;   // Trạng thái bật bơm thủ công từ web
 bool lightManual = false;  // Trạng thái bật đèn thủ công từ web
+bool emergency = false;    // Trạng thái dừng khẩn cấp từ web
 
 // --- Quản lý chu kỳ bơm nước tự động ---
 unsigned long lastPumpTime = 0;
@@ -155,13 +156,21 @@ void loop() {
       
       json.get(jsonData, "light_manual");
       if (jsonData.success) lightManual = jsonData.boolValue;
+
+      json.get(jsonData, "emergency");
+      if (jsonData.success) emergency = jsonData.boolValue;
     }
   }
 
   // ============================================================
-  // Task 2: Logic điều khiển máy bơm (Bơm tự động / Thủ công / Khóa an toàn)
+  // Task 2: Logic điều khiển máy bơm (Dừng khẩn cấp / Khóa an toàn / Thủ công / Tự động)
   // ============================================================
-  if (isWaterLow) {
+  if (emergency) {
+    // DỪNG KHẨN CẤP: Ngắt bơm ngay lập tức bất kể tự động hay thủ công
+    digitalWrite(PUMP_PIN, PUMP_OFF);
+    isPumpIntervalWaiting = false;
+  }
+  else if (isWaterLow) {
     // KHÓA AN TOÀN: Bể hết nước -> Cấm chạy bơm ngay lập tức để bảo vệ thiết bị
     digitalWrite(PUMP_PIN, PUMP_OFF);
     isPumpIntervalWaiting = false;
@@ -205,9 +214,13 @@ void loop() {
   }
 
   // ============================================================
-  // Task 3: Logic điều khiển đèn chiếu sáng (Tự động / Thủ công)
+  // Task 3: Logic điều khiển đèn chiếu sáng (Dừng khẩn cấp / Thủ công / Tự động)
   // ============================================================
-  if (lightManual) {
+  if (emergency) {
+    // DỪNG KHẨN CẤP: Tắt đèn ngay lập tức
+    digitalWrite(LIGHT_PIN, LIGHT_OFF);
+  }
+  else if (lightManual) {
     // Bật đèn thủ công từ web
     digitalWrite(LIGHT_PIN, LIGHT_ON);
   } else {

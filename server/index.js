@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import dns from 'node:dns';
 import nodemailer from 'nodemailer';
+import * as XLSX from 'xlsx';
 
 // Thiết lập DNS của Google để sửa lỗi querySrv ECONNREFUSED khi kết nối MongoDB Atlas
 dns.setServers(['8.8.8.8', '8.8.4.4']);
@@ -24,6 +25,7 @@ mongoose.connect(process.env.MONGODB_URI)
     console.log('>>> Đã kết nối thành công tới MongoDB Atlas!');
     seedDefaultUser();
     migrateActivityLogs();
+    cleanupOldData();
   })
   .catch(err => console.error('>>> Lỗi kết nối MongoDB Atlas:', err));
 
@@ -46,7 +48,8 @@ async function migrateActivityLogs() {
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  email: { type: String, default: 'vonhacphuoc@gmail.com' }
+  email: { type: String, default: 'vonhacphuoc@gmail.com' },
+  emailAlertEnabled: { type: Boolean, default: true }
 });
 
 const User = mongoose.model('User', userSchema, 'users');
@@ -193,6 +196,7 @@ const activityLogSchema = new mongoose.Schema({
   den:       { type: [entrySchema], default: [] },
   bom:       { type: [entrySchema], default: [] },
   canh_bao:  { type: [entrySchema], default: [] },
+  lich:      { type: [entrySchema], default: [] },
 });
 const ActivityLog = mongoose.model('ActivityLog', activityLogSchema, 'activity_logs');
 
@@ -205,6 +209,7 @@ const TYPE_TO_CAT = {
   pump_off:     'bom',
   water_low:    'canh_bao',
   emergency:    'canh_bao',
+  schedule:     'lich',
 };
 
 // POST /api/activity – upsert vào ngày hôm nay
@@ -280,7 +285,7 @@ app.get('/api/activity/list', async (req, res) => {
   const lim = parseInt(limit);
   const skp = parseInt(skip);
   
-  if (!['den', 'bom', 'canh_bao', 'all'].includes(category)) {
+  if (!['den', 'bom', 'canh_bao', 'lich', 'all'].includes(category)) {
     return res.status(400).json({ error: 'Category không hợp lệ.' });
   }
   
@@ -289,7 +294,7 @@ app.get('/api/activity/list', async (req, res) => {
     let allEntries = [];
     
     for (const day of days) {
-      const cats = category === 'all' ? ['den', 'bom', 'canh_bao'] : [category];
+      const cats = category === 'all' ? ['den', 'bom', 'canh_bao', 'lich'] : [category];
       const dayEntries = [];
       
       for (const cat of cats) {
@@ -572,8 +577,12 @@ async function sendWaterLowEmail() {
   let recipientEmail = process.env.ALERT_EMAIL_TO;
   try {
     const user = await User.findOne({ username: 'nhacphuoc25' });
-    if (user && user.email) {
-      recipientEmail = user.email;
+    if (user) {
+      if (user.email) recipientEmail = user.email;
+      if (user.emailAlertEnabled === false) {
+        console.log('>>> [Email] Người dùng đã tắt nhận thông báo email. Bỏ qua gửi cảnh báo.');
+        return { skipped: true, reason: 'disabled_by_user' };
+      }
     }
   } catch (dbErr) {
     console.error('>>> [Email] Lỗi khi truy vấn email người nhận từ DB:', dbErr);
@@ -632,7 +641,11 @@ app.get('/api/user/profile', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     }
-    res.json({ username: user.username, email: user.email || '' });
+    res.json({
+      username: user.username,
+      email: user.email || '',
+      emailAlertEnabled: user.emailAlertEnabled !== false
+    });
   } catch (error) {
     console.error('Lỗi GET /api/user/profile:', error);
     res.status(500).json({ error: 'Lỗi máy chủ khi lấy hồ sơ.' });
@@ -641,7 +654,7 @@ app.get('/api/user/profile', async (req, res) => {
 
 // PUT /api/user/profile – Cập nhật thông tin tài khoản
 app.put('/api/user/profile', async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, emailAlertEnabled } = req.body;
   if (!username) {
     return res.status(400).json({ error: 'Thiếu tham số username.' });
   }
@@ -649,12 +662,18 @@ app.put('/api/user/profile', async (req, res) => {
     const updateData = {};
     if (email !== undefined) updateData.email = email;
     if (password) updateData.password = password;
+    if (emailAlertEnabled !== undefined) updateData.emailAlertEnabled = emailAlertEnabled;
 
     const user = await User.findOneAndUpdate({ username }, updateData, { new: true });
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     }
-    res.json({ success: true, username: user.username, email: user.email });
+    res.json({
+      success: true,
+      username: user.username,
+      email: user.email,
+      emailAlertEnabled: user.emailAlertEnabled !== false
+    });
   } catch (error) {
     console.error('Lỗi PUT /api/user/profile:', error);
     res.status(500).json({ error: 'Lỗi máy chủ khi cập nhật hồ sơ.' });
@@ -670,6 +689,402 @@ app.post('/api/alert/water-low', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ══════════════════════════════════════════════
+// Schema & API: Lịch bảo trì (maintenance_schedules)
+// ══════════════════════════════════════════════
+const maintenanceSchema = new mongoose.Schema({
+  datetime:        { type: Date },                    // Dùng cho lịch một lần
+  category:        { type: String, required: true },   // soil | fertilizer | prune | tùy chỉnh
+  recurrence:      { type: String, default: 'once' }, // 'once' | 'weekly' | 'monthly'
+  daysOfWeek:      { type: [Number], default: [] },   // [0..6] dùng cho weekly
+  dayOfMonth:      { type: Number },                  // 1..28 dùng cho monthly
+  time:            { type: String },                  // 'HH:MM' dùng cho weekly/monthly
+  notified:        { type: Boolean, default: false }, // Đã gửi (lịch một lần)
+  lastNotifiedAt:  { type: Date },                    // Lần gửi cuối (lịch lặp lại)
+  created_at:      { type: Date, default: Date.now }
+});
+const Maintenance = mongoose.model('Maintenance', maintenanceSchema, 'maintenance_schedules');
+
+const MAINT_LABELS = {
+  soil:       'Thay đất mới',
+  fertilizer: 'Bón phân dinh dưỡng',
+  prune:      'Tỉa lá & Vệ sinh',
+};
+
+const MAINT_TIPS = {
+  soil:       'Hãy chuẩn bị đất cát pha trộn sẵn, gỡ nhẹ cây ra khỏi chậu, rũ bỏ đất cũ bám rễ, và trồng lại vào đất mới tơi xốp.',
+  fertilizer: 'Sử dụng phân bón loãng chuyên dụng cho xương rồng/sen đá, tưới nhẹ sau khi bón để phân thấm đều vào đất.',
+  prune:      'Dùng kéo sạch cắt bỏ lá úa và hư, lau sạch bề mặt lá bằng khăn ẩm mềm, kiểm tra dấu hiệu sâu bệnh.',
+};
+
+// GET /api/maintenance – Lấy danh sách lịch bảo trì
+app.get('/api/maintenance', async (req, res) => {
+  try {
+    const list = await Maintenance.find().sort({ datetime: 1 });
+    res.json(list);
+  } catch (err) {
+    console.error('Lỗi GET /api/maintenance:', err);
+    res.status(500).json({ error: 'Không thể lấy danh sách lịch bảo trì.' });
+  }
+});
+
+// POST /api/maintenance – Thêm lịch bảo trì mới
+app.post('/api/maintenance', async (req, res) => {
+  const { datetime, category, recurrence = 'once', daysOfWeek, dayOfMonth, time } = req.body;
+  if (!category) {
+    return res.status(400).json({ error: 'Thiếu trường category.' });
+  }
+  if (recurrence === 'once' && !datetime) {
+    return res.status(400).json({ error: 'Lịch một lần cần có trường datetime.' });
+  }
+  try {
+    const entryData = { category, recurrence };
+    if (recurrence === 'once') entryData.datetime = new Date(datetime);
+    if (recurrence === 'weekly')  { entryData.daysOfWeek = daysOfWeek || []; entryData.time = time || '08:00'; }
+    if (recurrence === 'monthly') { entryData.dayOfMonth = dayOfMonth || 1;  entryData.time = time || '08:00'; }
+
+    const entry = new Maintenance(entryData);
+    await entry.save();
+
+    // Ghi nhật ký hoạt động
+    const catLabel = MAINT_LABELS[category] || category;
+    const recurLabel = recurrence === 'weekly' ? 'hàng tuần' : recurrence === 'monthly' ? 'hàng tháng' : 'một lần';
+    await saveActivityLogBackend(
+      'schedule',
+      `Lên lịch bảo trì: ${catLabel}`,
+      `Đã thiết lập lịch nhắc ${recurLabel} cho hạng mục "${catLabel}".`
+    );
+
+    console.log(`>>> [Maintenance] Đã thêm lịch: ${catLabel} (${recurLabel})`);
+    res.json({ success: true, _id: entry._id });
+  } catch (err) {
+    console.error('Lỗi POST /api/maintenance:', err);
+    res.status(500).json({ error: 'Không thể lưu lịch bảo trì.' });
+  }
+});
+
+// DELETE /api/maintenance/:id – Xóa lịch bảo trì
+app.delete('/api/maintenance/:id', async (req, res) => {
+  try {
+    const deleted = await Maintenance.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Không tìm thấy lịch bảo trì.' });
+
+    // Ghi nhật ký xóa lịch
+    const catLabel = MAINT_LABELS[deleted.category] || deleted.category;
+    await saveActivityLogBackend(
+      'schedule',
+      `Xóa lịch bảo trì: ${catLabel}`,
+      `Người dùng đã xóa lịch nhắc "${catLabel}" khỏi hệ thống.`
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Lỗi DELETE /api/maintenance:', err);
+    res.status(500).json({ error: 'Không thể xóa lịch bảo trì.' });
+  }
+});
+
+// ── Gửi email nhắc bảo trì ──
+async function sendMaintenanceReminderEmail(entry, scheduleDesc) {
+  let recipientEmail = process.env.ALERT_EMAIL_TO;
+  try {
+    const user = await User.findOne({ username: 'nhacphuoc25' });
+    if (user) {
+      if (user.email) recipientEmail = user.email;
+      if (user.emailAlertEnabled === false) {
+        console.log(`>>> [Maintenance Email] Người dùng đã tắt nhận thông báo email. Bỏ qua gửi email nhắc nhở: ${entry.category}`);
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  const label = MAINT_LABELS[entry.category] || entry.category;
+  const tip   = MAINT_TIPS[entry.category]   || 'Hãy kiểm tra và thực hiện bảo trì theo kế hoạch.';
+  const timeStr = scheduleDesc || new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+  const catColor = entry.category === 'soil' ? '#A07C5A' : entry.category === 'fertilizer' ? '#88AB75' : '#78C0ED';
+  const catEmoji = entry.category === 'soil' ? '\uD83E\uDEB4' : entry.category === 'fertilizer' ? '\uD83C\uDF3F' : '\u2702\uFE0F';
+
+  const transporter = createMailTransporter();
+  const mailOptions = {
+    from: `"V\u01b0\u1EDDn Sen \u0110\u00e1 \uD83C\uDF35" <${process.env.ALERT_EMAIL_FROM}>`,
+    to: recipientEmail,
+    subject: `${catEmoji} NH\u1eAEC B\u1ea2O TR\u00cc: ${label} \u2013 \u0110\u00e3 \u0111\u1ebfn gi\u1EDD th\u1ef1c hi\u1EC7n!`,
+    html: `
+      <div style="font-family: 'Arial', sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9f5; border-radius: 12px; overflow: hidden; border: 1px solid #d4e9c8;">
+        <div style="background: linear-gradient(135deg, #2c5a3e, #4a8a60); padding: 32px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 26px;">🌵 V\u01b0\u1EDDn Sen \u0110\u00e1 C\u1EE7a T\u00f4i</h1>
+          <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0;">Nh\u1eafc nh\u1EDF b\u1ea3o tr\u00ec \u0111\u1ecbnh k\u1EF3</p>
+        </div>
+        <div style="padding: 32px;">
+          <div style="background: white; border-left: 5px solid ${catColor}; border-radius: 8px; padding: 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+            <div style="font-size: 32px; margin-bottom: 8px;">${catEmoji}</div>
+            <h2 style="color: ${catColor}; margin: 0 0 8px; font-size: 20px;">\u0110\u00e3 \u0111\u1ebfn gi\u1EDD: ${label}</h2>
+            <p style="color: #555; margin: 0; font-size: 14px;">L\u1ecbch: <strong>${timeStr}</strong></p>
+          </div>
+          <div style="background: #f0f7ec; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <h3 style="color: #2c5a3e; margin: 0 0 10px; font-size: 15px;">\uD83D\uDCA1 H\u01b0\u1EDBng d\u1EABn th\u1EF1c hi\u1EC7n:</h3>
+            <p style="color: #4a6050; margin: 0; font-size: 14px; line-height: 1.7;">${tip}</p>
+          </div>
+          <div style="background: #fff3cd; border-radius: 8px; padding: 14px; margin-bottom: 24px;">
+            <p style="color: #856404; margin: 0; font-size: 13px;">\u23f0 Sau khi ho\u00e0n t\u1EA5t, h\u00e3y ki\u1EC3m tra l\u1EA1i l\u1ecbch tr\u00ean \u1ee9ng d\u1EE5ng.</p>
+          </div>
+          <div style="text-align: center;">
+            <p style="color: #8a968c; font-size: 12px; margin: 0;">Email n\u00e0y \u0111\u01b0\u1EE3c g\u1EEDi t\u1EF1 \u0111\u1ED9ng t\u1EEB h\u1EC7 th\u1ED1ng V\u01b0\u1EDDn Sen \u0110\u00e1 Th\u00f4ng Minh.</p>
+          </div>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`>>> [Maintenance Email] \u0110\u00e3 g\u1EEDi nh\u1eafc ${label} t\u1EDBi ${recipientEmail}`);
+    return true;
+  } catch (err) {
+    console.error('>>> [Maintenance Email] L\u1ED7i g\u1EEDi email:', err.message);
+    return false;
+  }
+}
+
+// ── Cron job: Kiểm tra lịch bảo trì mỗi phút ──
+async function checkMaintenanceSchedules() {
+  try {
+    const now = new Date();
+    // Giờ Việt Nam (UTC+7)
+    const vnNow = new Date(now.getTime() + 7 * 3600000);
+    const vnHHMM = vnNow.toISOString().slice(11, 16); // 'HH:MM'
+    const vnDOW  = vnNow.getUTCDay();                  // 0=CN..6=T7
+    const vnDOM  = vnNow.getUTCDate();                 // 1..31
+    const vnDateStr = vnNow.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+    const allEntries = await Maintenance.find({});
+
+    for (const entry of allEntries) {
+      const recur = entry.recurrence || 'once';
+      const label = MAINT_LABELS[entry.category] || entry.category;
+      let shouldFire = false;
+      let scheduleDesc = '';
+
+      if (recur === 'once') {
+        // ─ Một lần: kiểm tra giống cũ, chưa gửi và đã đến giờ
+        if (!entry.notified && entry.datetime && entry.datetime <= new Date(now.getTime() + 60000)) {
+          shouldFire = true;
+          scheduleDesc = new Date(entry.datetime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        }
+      } else if (recur === 'weekly') {
+        // ─ Hàng tuần: kiểm tra ngày trong tuần + giờ khớp
+        const entryTime = (entry.time || '08:00').trim();
+        const inDay  = (entry.daysOfWeek || []).includes(vnDOW);
+        const inTime = vnHHMM === entryTime;
+        // Kiểm tra chưa gửi hôm nay
+        const alreadySentToday = entry.lastNotifiedAt &&
+          new Date(entry.lastNotifiedAt).toISOString().slice(0, 10) === vnDateStr;
+
+        if (inDay && inTime && !alreadySentToday) {
+          shouldFire = true;
+          const DOW_NAMES = ['Chủ Nhật','Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy'];
+          scheduleDesc = `Hàng tuần (${DOW_NAMES[vnDOW]}) lúc ${entryTime}`;
+        }
+      } else if (recur === 'monthly') {
+        // ─ Hàng tháng: kiểm tra ngày trong tháng + giờ khớp
+        const entryTime = (entry.time || '08:00').trim();
+        const inDay  = entry.dayOfMonth === vnDOM;
+        const inTime = vnHHMM === entryTime;
+        // Kiểm tra chưa gửi tháng này (so sánh YYYY-MM)
+        const alreadySentThisMonth = entry.lastNotifiedAt &&
+          new Date(entry.lastNotifiedAt).toISOString().slice(0, 7) === vnDateStr.slice(0, 7);
+
+        if (inDay && inTime && !alreadySentThisMonth) {
+          shouldFire = true;
+          scheduleDesc = `Hàng tháng (ngày ${vnDOM}) lúc ${entryTime}`;
+        }
+      }
+
+      if (!shouldFire) continue;
+
+      const sent = await sendMaintenanceReminderEmail(entry, scheduleDesc);
+      if (sent) {
+        if (recur === 'once') {
+          // Xóa lịch nhắc một lần khi đã thông báo xong
+          await Maintenance.findByIdAndDelete(entry._id);
+        } else {
+          // Lịch lặp: chỉ cập nhật lastNotifiedAt để nhắc lần sau
+          await Maintenance.findByIdAndUpdate(entry._id, { lastNotifiedAt: now });
+        }
+
+        // Ghi nhật ký
+        await saveActivityLogBackend(
+          'schedule',
+          `Nhắc bảo trì: ${label}`,
+          `Đã gửi email nhắc nhở bảo trì đúng lịch (${scheduleDesc}).`
+        );
+        console.log(`>>> [Maintenance Cron] Gửi nhắc: ${label} (${scheduleDesc})`);
+      }
+    }
+  } catch (err) {
+    console.error('>>> [Maintenance Cron] Lỗi:', err.message);
+  }
+}
+
+// Kiểm tra mỗi 60 giây
+setInterval(checkMaintenanceSchedules, 60 * 1000);
+console.log('>>> Dịch vụ nhắc lịch bảo trì đã được kích hoạt (kiểm tra mỗi 60 giây).');
+
+
+// GET /api/export/data – Trả về toàn bộ dữ liệu lịch sử đã được làm sạch và làm phẳng
+app.get('/api/export/data', async (req, res) => {
+  try {
+    const sensorLogs = await SensorLog.find().sort({ timestamp: -1 });
+    const dailyWater = await DailyWater.find().sort({ date: -1 });
+    const activityDocs = await ActivityLog.find().sort({ date: -1 });
+    
+    const activityLogs = [];
+    for (const doc of activityDocs) {
+      const cats = ['den', 'bom', 'canh_bao', 'lich'];
+      for (const cat of cats) {
+        const entries = doc[cat] || [];
+        for (const e of entries) {
+          activityLogs.push({
+            date: doc.date,
+            time: e.time,
+            category: cat === 'den' ? 'Đèn LED' : cat === 'bom' ? 'Máy bơm' : cat === 'canh_bao' ? 'Cảnh báo' : 'Lịch bảo trì',
+            action: e.action
+          });
+        }
+      }
+    }
+    activityLogs.sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+
+    res.json({
+      sensorLogs,
+      dailyWater,
+      activityLogs
+    });
+  } catch (error) {
+    console.error('Lỗi GET /api/export/data:', error);
+    res.status(500).json({ error: 'Không thể lấy dữ liệu xuất khẩu.' });
+  }
+});
+
+// GET /api/export/excel – Tạo và tải về file Excel (.xlsx) chứa toàn bộ dữ liệu vườn
+app.get('/api/export/excel', async (req, res) => {
+  try {
+    const sensorLogs = await SensorLog.find().sort({ timestamp: -1 });
+    const dailyWater = await DailyWater.find().sort({ date: -1 });
+    const activityDocs = await ActivityLog.find().sort({ date: -1 });
+    
+    // Định dạng Sheet 1: Nhật ký Cảm biến
+    const sensorData = sensorLogs.map((log, index) => {
+      const date = new Date(log.timestamp);
+      const formattedTime = date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      const humPercent = Math.max(0, Math.min(100, Math.round(((4095 - log.soil_raw) / 4095) * 100)));
+      return {
+        'STT': index + 1,
+        'Thời gian': formattedTime,
+        'Cường độ sáng (Lux)': Math.round(log.lux || 0),
+        'Độ ẩm đất (%)': humPercent,
+        'Trạng thái nước': log.water_status === 'HET_NUOC' ? 'Hết nước' : 'Bình thường',
+        'Trạng thái bơm': log.pump_status,
+        'Trạng thái đèn': log.light_status
+      };
+    });
+
+    // Định dạng Sheet 2: Tiêu thụ nước
+    const waterData = dailyWater.map((item, index) => ({
+      'STT': index + 1,
+      'Ngày': item.date.split('-').reverse().join('/'),
+      'Lượng nước tiêu thụ (Lít)': parseFloat((item.amount_ml / 1000).toFixed(3))
+    }));
+
+    // Định dạng Sheet 3: Nhật ký hoạt động
+    const activityData = [];
+    let actIndex = 1;
+    for (const doc of activityDocs) {
+      const cats = ['den', 'bom', 'canh_bao', 'lich'];
+      for (const cat of cats) {
+        const entries = doc[cat] || [];
+        for (const e of entries) {
+          activityData.push({
+            'STT': actIndex++,
+            'Ngày': doc.date.split('-').reverse().join('/'),
+            'Giờ': e.time,
+            'Danh mục': cat === 'den' ? 'Đèn LED' : cat === 'bom' ? 'Máy bơm' : cat === 'canh_bao' ? 'Cảnh báo' : 'Lịch bảo trì',
+            'Hành động chi tiết': e.action
+          });
+        }
+      }
+    }
+    
+    // Sắp xếp activityData theo Ngày và Giờ giảm dần
+    activityData.sort((a, b) => {
+      const dateA = a['Ngày'].split('/').reverse().join('-');
+      const dateB = b['Ngày'].split('/').reverse().join('-');
+      return dateB.localeCompare(dateA) || b['Giờ'].localeCompare(a['Giờ']);
+    });
+    // Đánh số thứ tự lại từ 1
+    activityData.forEach((item, idx) => {
+      item['STT'] = idx + 1;
+    });
+
+    // Tạo Workbook
+    const wb = XLSX.utils.book_new();
+
+    const wsSensor = XLSX.utils.json_to_sheet(sensorData);
+    XLSX.utils.book_append_sheet(wb, wsSensor, 'Nhật ký Cảm biến');
+
+    const wsWater = XLSX.utils.json_to_sheet(waterData);
+    XLSX.utils.book_append_sheet(wb, wsWater, 'Tiêu thụ nước');
+
+    const wsActivity = XLSX.utils.json_to_sheet(activityData);
+    XLSX.utils.book_append_sheet(wb, wsActivity, 'Nhật ký hoạt động');
+
+    // Chuyển đổi thành Buffer
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=Bao_Cao_Vuon_Sen_Da.xlsx');
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Lỗi GET /api/export/excel:', error);
+    res.status(500).json({ error: 'Không thể xuất file Excel.' });
+  }
+});
+
+// Dịch vụ tự động xóa dữ liệu cũ hơn 65 ngày
+async function cleanupOldData() {
+  try {
+    const daysLimit = 65;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysLimit);
+    
+    // Chuỗi định dạng YYYY-MM-DD cho daily_water và activity_logs
+    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+    
+    console.log(`>>> [Cleanup] Bắt đầu dọn dẹp dữ liệu cũ hơn ${daysLimit} ngày (trước ngày ${cutoffStr})...`);
+
+    // 1. Xóa trong sensor_logs (dùng timestamp)
+    const sensorDel = await SensorLog.deleteMany({ timestamp: { $lt: cutoffDate } });
+    
+    // 2. Xóa trong daily_water (dùng date string YYYY-MM-DD)
+    const waterDel = await DailyWater.deleteMany({ date: { $lt: cutoffStr } });
+    
+    // 3. Xóa trong activity_logs (dùng date string YYYY-MM-DD)
+    const activityDel = await ActivityLog.deleteMany({ date: { $lt: cutoffStr } });
+
+    console.log(`>>> [Cleanup] Hoàn tất dọn dẹp dữ liệu:`);
+    console.log(`   - Đã xóa ${sensorDel.deletedCount} bản ghi trong sensor_logs`);
+    console.log(`   - Đã xóa ${waterDel.deletedCount} ngày dữ liệu trong daily_water`);
+    console.log(`   - Đã xóa ${activityDel.deletedCount} ngày nhật ký trong activity_logs`);
+  } catch (error) {
+    console.error('>>> [Cleanup] Lỗi khi dọn dẹp dữ liệu cũ:', error);
+  }
+}
+
+// Chạy dọn dẹp định kỳ mỗi 24 giờ
+setInterval(cleanupOldData, 24 * 60 * 60 * 1000);
 
 // Khởi động server Express
 app.listen(PORT, () => {

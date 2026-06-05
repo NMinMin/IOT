@@ -2555,6 +2555,66 @@ body.dark .pump-day-title {
   border-bottom-color: #3C4740;
 }
 
+/* Modal Footer Buttons */
+.btn-modal-cancel {
+  padding: 8px 20px;
+  width: auto;
+  min-width: 90px;
+  border: 2px solid var(--dark-green);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--dark-green);
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.btn-modal-cancel:hover {
+  background: rgba(74, 91, 76, 0.08);
+}
+
+.btn-modal-save {
+  padding: 10px 28px;
+  min-width: 140px;
+  background: var(--primary-green);
+  color: var(--white);
+  border: 2px solid var(--dark-green);
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+}
+
+.btn-modal-save:hover {
+  opacity: 0.9;
+}
+
+.btn-modal-save:active {
+  transform: scale(0.98);
+}
+
+/* Chế độ tối cho các nút modal */
+body.dark .btn-modal-cancel {
+  border-color: #3C4740;
+  color: #E2E4D9;
+}
+
+body.dark .btn-modal-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.dark .btn-modal-save {
+  background: var(--primary-green);
+  color: var(--white);
+  border-color: #3C4740;
+}
+
 /* ══════════════════════════════════════════════
    FANCY TOAST & DUAL-COLUMN ACTIVITY LOGS
    ══════════════════════════════════════════════ */
@@ -2999,6 +3059,303 @@ body.dark .global-water-banner .btn-dismiss-alert:hover {
   background: #fef3c7;
 }
 
+/* Dark mode for activity detail description box */
+body.dark .activity-detail-desc-box {
+  background: #2B312D !important;
+  border-color: #3C4740 !important;
+}
 
+/* ══ Schedule Page Grid ══ */
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1.5fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.schedule-col-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-col-right {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile responsiveness for schedule grid */
+@media (max-width: 768px) {
+  .schedule-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+
+/* ── Dark Mode Root Variables & Element Overrides ── */
+body.dark {
+  --bg-color: #0c0e0c;
+  --white: #161a16;
+  --dark-green: #e1e8e2;
+  --primary-green: #88ab75;
+  --border-thick: 2.5px solid #283029;
+  background-image: none !important;
+  background-color: #0c0e0c !important;
+}
+
+body.dark input,
+body.dark select,
+body.dark textarea {
+  background-color: #1a201b !important;
+  color: #e1e8e2 !important;
+  border-color: #283029 !important;
+}
+
+body.dark input[readonly] {
+  background-color: #121613 !important;
+  color: #8a968c !important;
+  border-color: #283029 !important;
+}
+
+body.dark .input-wrap input {
+  background-color: #1a201b !important;
+  color: #e1e8e2 !important;
+  border-color: #283029 !important;
+}
+
+body.dark .desktop-menu,
+body.dark .log-filter-btn,
+body.dark .log-filter-chip {
+  background-color: #161a16 !important;
+  border-color: #283029 !important;
+  color: #e1e8e2 !important;
+}
+
+body.dark .log-filter-chip:hover,
+body.dark .log-filter-btn:hover {
+  background-color: #202621 !important;
+}
+
+body.dark .log-filter-chip.active {
+  background-color: var(--primary-green) !important;
+  color: #fff !important;
+  border-color: var(--primary-green) !important;
+}
+
+body.dark .log-filter-dropdown {
+  background-color: #161a16 !important;
+  border-color: #283029 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark .weather-badge {
+  background-color: #142029 !important;
+  border-color: #1f3747 !important;
+  color: #78c0ed !important;
+}
+
+body.dark .modal-card {
+  background-color: #161a16 !important;
+  border-color: #283029 !important;
+}
+
+body.dark .modal-header h3,
+body.dark .modal-body label {
+  color: #e1e8e2 !important;
+}
+
+body.dark .maint-recur-btn,
+body.dark .maint-dow-btn {
+  background: #1a201b !important;
+  color: #8a968c !important;
+  border-color: #283029 !important;
+}
+
+body.dark .maint-recur-btn.active,
+body.dark .maint-dow-btn.active {
+  background: var(--primary-green) !important;
+  color: #fff !important;
+  border-color: var(--primary-green) !important;
+}
+
+body.dark #maint-scheduled-list > div {
+  background-color: #1a201b !important;
+  border-color: #283029 !important;
+}
+
+body.dark .btn-refill {
+  background-color: rgba(75, 163, 227, 0.15) !important;
+  color: var(--primary-green) !important;
+  border-color: var(--light-blue) !important;
+}
+
+body.dark .pill[style*="background:#EAF5FC"],
+body.dark .pill[style*="background: #EAF5FC"] {
+  background-color: rgba(75, 163, 227, 0.15) !important;
+}
+
+body.dark .log-item:hover {
+  background-color: #1a201b !important;
+}
+
+/* ── Refined Dark Mode Elements ── */
+body.dark .btn-pump {
+  background-color: #1a201b !important;
+  border-color: #283029 !important;
+  color: #e1e8e2 !important;
+}
+
+body.dark .btn-pump:hover {
+  background-color: #202621 !important;
+}
+
+body.dark .hero-overlay .pill {
+  background: rgba(22, 26, 22, 0.85) !important;
+  border-color: #283029 !important;
+}
+
+body.dark .hero-overlay .pill-val {
+  color: #e1e8e2 !important;
+}
+
+body.dark .hero-overlay .pill-text {
+  color: #8fa090 !important;
+}
+
+body.dark .alert-pill {
+  background: rgba(30, 20, 20, 0.9) !important;
+  border-color: var(--red-alert) !important;
+}
+
+body.dark .alert-pill span {
+  color: #e1e8e2 !important;
+}
+
+body.dark .tl-card {
+  background-color: #161a16 !important;
+  border-color: #283029 !important;
+}
+
+body.dark .tl-card .tl-title {
+  color: #e1e8e2 !important;
+}
+
+body.dark .tl-card .tl-date {
+  color: #8a968c !important;
+}
+
+body.dark .alert-card {
+  background: #151b22 !important;
+  border-color: #1f2d3d !important;
+}
+
+body.dark .alert-icon-wrap,
+body.dark .alert-toggle-pill {
+  background: #1f2730 !important;
+  border-color: #2b3947 !important;
+  color: #78c0ed !important;
+}
+
+body.dark .alert-hdr p {
+  color: #8fa090 !important;
+}
+
+body.dark .btn-outline {
+  color: #e1e8e2 !important;
+  border-color: #283029 !important;
+}
+
+body.dark .btn-outline.dark {
+  background: #252a26 !important;
+  color: #e1e8e2 !important;
+  border-color: #3c4740 !important;
+}
+
+body.dark .btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+body.dark .btn-outline.dark:hover {
+  background: #3c4740 !important;
+}
+
+body.dark .toggle-list-item {
+  border-bottom-color: #283029 !important;
+}
+
+body.dark .btn-emrg:hover {
+  background-color: rgba(242, 97, 87, 0.15) !important;
+}
+
+/* Switch sliders track & knobs in dark mode */
+body.dark .slider {
+  background-color: #202621 !important;
+  border-color: #283029 !important;
+}
+
+body.dark .slider:before {
+  background-color: #8a968c !important;
+  border-color: #283029 !important;
+}
+
+body.dark input:checked+.slider {
+  background-color: var(--primary-green) !important;
+  border-color: var(--primary-green) !important;
+}
+
+body.dark input:checked+.slider:before {
+  background-color: #fff !important;
+  border-color: var(--primary-green) !important;
+}
+
+/* Colored log icons in activity list */
+body.dark .log-icon.yellow { background: rgba(248, 200, 80, 0.15) !important; color: #FAAD14 !important; }
+body.dark .log-icon.blue   { background: rgba(82, 170, 223, 0.15) !important; color: var(--light-blue) !important; }
+body.dark .log-icon.green  { background: rgba(104, 159, 56, 0.15) !important; color: var(--primary-green) !important; }
+body.dark .log-icon.red    { background: rgba(229, 62, 62, 0.2) !important;   color: var(--red-alert) !important; }
+
+
+/* Back button default color (fixes missing arrow icon in light mode) */
+.btn-back {
+  color: var(--dark-green);
+}
+
+/* ── Refined Dark Mode Elements (Part 2) ── */
+body.dark .monthly-card {
+  background-color: #161a16 !important;
+  color: #e1e8e2 !important;
+  border: 2.5px solid #283029 !important;
+}
+
+body.dark .btn-back {
+  color: #e1e8e2 !important;
+  border-color: #283029 !important;
+  background-color: #161a16 !important;
+}
+
+body.dark .export-btns button {
+  background-color: #1a201b !important;
+  border-color: #283029 !important;
+  color: #e1e8e2 !important;
+}
+
+body.dark .export-btns button:hover {
+  background-color: #202621 !important;
+}
+
+/* ── Refined Dark Mode Elements (Part 3) ── */
+body.dark .log-item {
+  background: #1e241f !important;
+  border-bottom: none !important;
+}
+
+body.dark .log-day-count {
+  background: #283029 !important;
+  color: #8a968c !important;
+}
+
+body.dark .log-day-header {
+  border-top-color: #283029 !important;
+}
 
 
