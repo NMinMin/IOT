@@ -54,8 +54,8 @@ export const appHTML = /* html */`
         <button class="nav-btn-desktop" data-goto="settings">${t('nav_settings')}</button>
       </nav>
       <div class="weather-badge" id="weather-badge">
-        <span><i data-lucide="cloud-sun"></i></span><span class="weather-temp">32°C</span>
-        <span class="sep">|</span><span>${t('weather_city')}</span>
+        <span id="weather-badge-icon-wrap"><span><i data-lucide="cloud-sun"></i></span></span><span class="weather-temp" id="weather-badge-temp">32°C</span>
+        <span class="sep">|</span><span id="weather-badge-city">${t('weather_city')}</span>
       </div>
       <div class="avatar-wrap" id="avatar-goto-settings">
         <img src="./doc.jpg" alt="Avatar" class="avatar" />
@@ -105,16 +105,16 @@ export const appHTML = /* html */`
         <div class="wc-hdr">
           <div>
             <h3>${t('current_weather')}</h3>
-            <p>${t('dong_nai')}</p>
+            <p id="wc-city">${t('dong_nai')}</p>
           </div>
-          <i data-lucide="cloud-sun"></i>
+          <span id="wc-icon-wrap"><i data-lucide="cloud-sun"></i></span>
         </div>
-        <div class="wc-temp">32°<span>C</span></div>
+        <div class="wc-temp" id="wc-temp">32°<span>C</span></div>
         <div class="wc-details">
-          <div class="wc-box"><span>${t('humidity')}</span><strong>65%</strong></div>
-          <div class="wc-box"><span>${t('uv_index')}</span><strong>${t('uv_extreme')}</strong></div>
+          <div class="wc-box"><span>${t('humidity')}</span><strong id="wc-humidity">65%</strong></div>
+          <div class="wc-box"><span>${t('uv_index')}</span><strong id="wc-uv">${t('uv_extreme')}</strong></div>
         </div>
-        <div class="wc-forecast">
+        <div class="wc-forecast" id="wc-forecast">
           <div class="wc-f-title">${t('forecast_3_days')}</div>
           <div class="wc-row"><span>${t('tomorrow')}</span><i data-lucide="sun" style="width:16px;height:16px"></i><span>34° / 26°</span></div>
           <div class="wc-row"><span>${t('wednesday')}</span><i data-lucide="cloud-rain" style="width:16px;height:16px"></i><span>33° / 25°</span></div>

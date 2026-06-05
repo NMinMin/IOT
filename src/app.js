@@ -403,7 +403,6 @@ function updateHeader(page) {
 
   if (page !== 'dashboard') {
     btnBack?.classList.remove('hidden');
-    weather?.classList.add('hidden');
   }
   if (page === 'statistics') statTabs?.classList.remove('hidden');
 }
@@ -1527,6 +1526,130 @@ export async function exportToPDF() {
     alert(t('print_pdf_error'));
   }
 }
+
+/* ══════════════════════════════════════════════
+   LIVE WEATHER API INTEGRATION
+   ══════════════════════════════════════════════ */
+function getUVLabelKey(uv) {
+  if (uv <= 2) return 'uv_low';
+  if (uv <= 5) return 'uv_moderate';
+  if (uv <= 7) return 'uv_high';
+  if (uv <= 10) return 'uv_very_high';
+  return 'uv_extreme';
+}
+
+function updateWeatherUI(data) {
+  const current = data.current;
+  if (!current) return;
+
+  const tempC = Math.round(current.temp_c);
+  const humidity = current.humidity;
+  const uv = current.uv;
+  const conditionIcon = current.condition.icon;
+  const conditionText = current.condition.text;
+
+  // 1. Cập nhật Badge thời tiết trên Header
+  const badgeIconWrap = document.getElementById('weather-badge-icon-wrap');
+  const badgeTemp = document.getElementById('weather-badge-temp');
+  const badgeCity = document.getElementById('weather-badge-city');
+
+  if (badgeIconWrap) {
+    const iconUrl = conditionIcon.startsWith('//') ? 'https:' + conditionIcon : conditionIcon;
+    badgeIconWrap.innerHTML = `<span><img src="${iconUrl}" alt="${conditionText}" style="width: 22px; height: 22px; vertical-align: middle; object-fit: contain;" /></span>`;
+  }
+  if (badgeTemp) {
+    badgeTemp.textContent = `${tempC}°C`;
+  }
+  if (badgeCity) {
+    badgeCity.textContent = t('weather_city');
+  }
+
+  // 2. Cập nhật Weather Card trên Dashboard
+  const wcCity = document.getElementById('wc-city');
+  const wcIconWrap = document.getElementById('wc-icon-wrap');
+  const wcTemp = document.getElementById('wc-temp');
+  const wcHumidity = document.getElementById('wc-humidity');
+  const wcUv = document.getElementById('wc-uv');
+  const wcForecast = document.getElementById('wc-forecast');
+
+  if (wcCity) {
+    wcCity.textContent = t('dong_nai');
+  }
+  if (wcIconWrap) {
+    const iconUrl = conditionIcon.startsWith('//') ? 'https:' + conditionIcon : conditionIcon;
+    wcIconWrap.innerHTML = `<img src="${iconUrl}" alt="${conditionText}" style="width: 36px; height: 36px; object-fit: contain;" />`;
+  }
+  if (wcTemp) {
+    wcTemp.innerHTML = `${tempC}°<span>C</span>`;
+  }
+  if (wcHumidity) {
+    wcHumidity.textContent = `${humidity}%`;
+  }
+  if (wcUv) {
+    const uvLabelKey = getUVLabelKey(uv);
+    wcUv.textContent = `${uv} (${t(uvLabelKey)})`;
+  }
+
+  // 3. Cập nhật Dự báo thời tiết 3 ngày
+  const forecastdays = data.forecast?.forecastday;
+  if (wcForecast && forecastdays && forecastdays.length >= 3) {
+    let html = `<div class="wc-f-title">${t('forecast_3_days')}</div>`;
+    
+    // Bỏ qua ngày hôm nay (index 0), lấy ngày mai (index 1) và ngày kia (index 2)
+    forecastdays.slice(1).forEach((dayData, idx) => {
+      const isTomorrow = idx === 0;
+      let dayLabel = '';
+      if (isTomorrow) {
+        dayLabel = t('tomorrow');
+      } else {
+        const dateObj = new Date(dayData.date);
+        const dayOfWeek = dateObj.getDay();
+        const DOW_KEYS = ['dow_sun', 'dow_mon', 'dow_tue', 'dow_wed', 'dow_thu', 'dow_fri', 'dow_sat'];
+        dayLabel = t(DOW_KEYS[dayOfWeek]);
+      }
+      
+      const dayIcon = dayData.day.condition.icon;
+      const dayIconUrl = dayIcon.startsWith('//') ? 'https:' + dayIcon : dayIcon;
+      const maxTemp = Math.round(dayData.day.maxtemp_c);
+      const minTemp = Math.round(dayData.day.mintemp_c);
+      const dayText = dayData.day.condition.text;
+
+      html += `
+        <div class="wc-row">
+          <span>${dayLabel}</span>
+          <img src="${dayIconUrl}" alt="${dayText}" style="width: 20px; height: 20px; object-fit: contain;" />
+          <span>${maxTemp}° / ${minTemp}°</span>
+        </div>
+      `;
+    });
+    
+    wcForecast.innerHTML = html;
+  }
+}
+
+export async function initWeather() {
+  const apiKey = "dbe54977752e443891d134016262704";
+  const city = "Dong Nai";
+  const lang = localStorage.getItem('language') || 'vi';
+  
+  const fetchWeather = async () => {
+    try {
+      const res = await fetch(`http://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${encodeURIComponent(city)}&days=3&aqi=no&alerts=no&lang=${lang}`);
+      if (!res.ok) {
+        throw new Error(`Weather API returned status ${res.status}`);
+      }
+      const data = await res.json();
+      updateWeatherUI(data);
+    } catch (err) {
+      console.warn("Lỗi tải thông tin thời tiết:", err);
+    }
+  };
+
+  await fetchWeather();
+  // Cập nhật lại sau mỗi 15 phút
+  setInterval(fetchWeather, 15 * 60 * 1000);
+}
+
 
 
 

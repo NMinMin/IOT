@@ -5,7 +5,7 @@ import {
   setWaterValue, updateFirebaseControl, updateFirebaseSetting,
   decreaseTankWater, WATER_PER_MANUAL_PCT, addActivityLog,
   openPumpHistoryModal, saveTankWater, getTankWater, showFancyToast,
-  loadUserProfile, exportToExcel, exportToPDF
+  loadUserProfile, exportToExcel, exportToPDF, initWeather
 } from './app.js';
 import { t } from './locales.js';
 
@@ -323,6 +323,7 @@ document.getElementById('control-light-manual').addEventListener('change', e => 
 
 /* ── IoT sync initiation ── */
 startSensorSim();
+initWeather();
 
 /* ── Modal Chỉnh sửa hồ sơ ── */
 const btnEditProfile = document.getElementById('btn-edit-profile');
