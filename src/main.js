@@ -4,7 +4,8 @@ import {
   goTo, startSensorSim, toggleDark, bindSlider, showToast,
   setWaterValue, updateFirebaseControl, updateFirebaseSetting,
   decreaseTankWater, WATER_PER_MANUAL_PCT, addActivityLog,
-  openPumpHistoryModal, saveTankWater, getTankWater, showFancyToast
+  openPumpHistoryModal, saveTankWater, getTankWater, showFancyToast,
+  loadUserProfile
 } from './app.js';
 
 /* ── Render shell ── */
@@ -77,6 +78,7 @@ const doLogin = async () => {
         localStorage.removeItem('rememberedPassword');
       }
       navigate('dashboard');
+      loadUserProfile(username);
       showToast('<i data-lucide="user-check" style="width:18px;height:18px"></i> Đăng nhập thành công!');
     } else {
       alert(data.error || 'Đăng nhập thất bại!');
@@ -149,9 +151,14 @@ document.getElementById('btn-refill-water').addEventListener('click', () => {
   
   const alertWaterLow = document.getElementById('alert-water-low');
   if (alertWaterLow) alertWaterLow.classList.add('hidden');
+  const globalWaterAlert = document.getElementById('global-water-alert');
+  if (globalWaterAlert) globalWaterAlert.classList.add('hidden');
+  window._waterAlertEmailSent = false;
   
   showFancyToast('Thành công', 'Đã châm đầy bể nước 100%!', 'success');
 });
+
+
 
 /* ── Water button (Tưới thủ công 5 giây) ── */
 document.getElementById('btn-water').addEventListener('click', () => {
@@ -252,3 +259,96 @@ document.getElementById('control-light-manual').addEventListener('change', e => 
 
 /* ── IoT sync initiation ── */
 startSensorSim();
+
+/* ── Modal Chỉnh sửa hồ sơ ── */
+const btnEditProfile = document.getElementById('btn-edit-profile');
+const modalEditProfile = document.getElementById('modal-edit-profile');
+const btnCloseProfileModal = document.getElementById('btn-close-profile-modal');
+const btnCancelProfile = document.getElementById('btn-cancel-profile');
+const btnSaveProfile = document.getElementById('btn-save-profile');
+
+const editUsernameInput = document.getElementById('edit-profile-username');
+const editEmailInput = document.getElementById('edit-profile-email');
+const editPasswordInput = document.getElementById('edit-profile-password');
+
+if (btnEditProfile) {
+  btnEditProfile.addEventListener('click', async () => {
+    const currentUsername = emailInput.value.trim() || 'nhacphuoc25';
+    editUsernameInput.value = currentUsername;
+    editPasswordInput.value = '';
+    
+    // Tải profile để điền email hiện tại
+    try {
+      const res = await fetch(`http://localhost:5000/api/user/profile?username=${encodeURIComponent(currentUsername)}`);
+      if (res.ok) {
+        const data = await res.json();
+        editEmailInput.value = data.email || '';
+      }
+    } catch (err) {
+      console.error('Không thể lấy thông tin hồ sơ:', err);
+    }
+    
+    modalEditProfile.classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: modalEditProfile });
+  });
+}
+
+const hideProfileModal = () => {
+  modalEditProfile.classList.add('hidden');
+};
+
+if (btnCloseProfileModal) btnCloseProfileModal.addEventListener('click', hideProfileModal);
+if (btnCancelProfile) btnCancelProfile.addEventListener('click', hideProfileModal);
+if (modalEditProfile) {
+  modalEditProfile.addEventListener('click', (e) => {
+    if (e.target === modalEditProfile) hideProfileModal();
+  });
+}
+
+if (btnSaveProfile) {
+  btnSaveProfile.addEventListener('click', async () => {
+    const username = editUsernameInput.value;
+    const email = editEmailInput.value.trim();
+    const password = editPasswordInput.value.trim();
+    
+    if (!email) {
+      alert('Vui lòng nhập email!');
+      return;
+    }
+    
+    btnSaveProfile.disabled = true;
+    btnSaveProfile.textContent = 'Đang lưu...';
+    
+    try {
+      const res = await fetch('http://localhost:5000/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Cập nhật lại giao diện hiển thị
+        const emailEl = document.getElementById('profile-display-email');
+        if (emailEl) emailEl.textContent = data.email;
+        
+        // Nếu thay đổi password, cập nhật cả savedPass để auto-login hoạt động đúng
+        if (password) {
+          localStorage.setItem('rememberedPassword', password);
+          passInput.value = password;
+        }
+        
+        showFancyToast('Thành công', 'Đã cập nhật thông tin hồ sơ!', 'success');
+        hideProfileModal();
+      } else {
+        alert(data.error || 'Cập nhật thất bại!');
+      }
+    } catch (err) {
+      console.error('Lỗi cập nhật hồ sơ:', err);
+      alert('Lỗi kết nối tới Server.');
+    } finally {
+      btnSaveProfile.disabled = false;
+      btnSaveProfile.textContent = 'Lưu thay đổi';
+    }
+  });
+}
+

@@ -85,6 +85,7 @@ export const appHTML = /* html */`
             </div>
           </div>
           <div class="hero-bottom">
+            <button class="btn-water" id="btn-water"><i data-lucide="help-circle" style="width:18px;height:18px"></i> Tưới Ngay</button>
             <div class="alert-pill" id="alert-water-low">
               <i data-lucide="alert-triangle" class="icon" style="width:20px;height:20px"></i>
               <div>
@@ -92,7 +93,6 @@ export const appHTML = /* html */`
                 <span>Bể nước chỉ còn 12% - Vui lòng châm thêm.</span>
               </div>
             </div>
-            <button class="btn-water" id="btn-water"><i data-lucide="help-circle" style="width:18px;height:18px"></i> Tưới Ngay</button>
           </div>
         </div>
       </div>
@@ -204,7 +204,7 @@ export const appHTML = /* html */`
     <div class="stats-grid">
 
       <!-- LEFT COL -->
-      <div class="col-left" style="display:flex; flex-direction:column; gap:24px;">
+      <div class="col-left" style="display:flex; flex-direction:column; gap:24px; height:100%;">
         <div class="card">
           <div class="chart-header" style="margin-bottom:0;">
             <div>
@@ -233,12 +233,12 @@ export const appHTML = /* html */`
       </div>
 
       <!-- RIGHT COL -->
-      <div class="col-right" style="display:flex; flex-direction:column; gap:24px;">
+      <div class="col-right" style="display:flex; flex-direction:column; gap:24px; height:100%;">
         <div class="monthly-card">
-          <h3><i data-lucide="award" style="color:var(--yellow);fill:var(--yellow)"></i> Tổng Kết Tháng 6</h3>
-          <div class="monthly-row"><span>Cường độ ánh sáng TB</span><strong style="color:var(--yellow)">-- lux</strong></div>
-          <div class="monthly-row"><span>Số lần tưới tự động</span><strong style="color:var(--light-blue)">-- lần</strong></div>
-          <div class="monthly-row"><span>Tiết kiệm nước</span><strong style="color:var(--primary-green)">--%</strong></div>
+          <h3 id="monthly-title"><i data-lucide="award" style="color:var(--yellow);fill:var(--yellow)"></i> Tổng Kết Tháng <span id="monthly-month">--</span></h3>
+          <div class="monthly-row"><span>Cường độ ánh sáng TB</span><strong id="monthly-lux" style="color:var(--yellow)">-- lux</strong></div>
+          <div class="monthly-row"><span>Số lần tưới tự động</span><strong id="monthly-pump" style="color:var(--light-blue)">-- lần</strong></div>
+          <div class="monthly-row" style="border:none;padding:0;margin:0;"><span>Tiết kiệm nước</span><strong id="monthly-water" style="color:var(--primary-green)">--</strong></div>
         </div>
 
         <div class="log-card card">
@@ -256,24 +256,8 @@ export const appHTML = /* html */`
               </div>
             </div>
           </div>
-<<<<<<< HEAD
-          <div id="activity-log-list" class="activity-log-scroll">
-            <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Chưa có hoạt động nào.</p>
-=======
-          <div class="log-columns">
-            <div class="log-col-box">
-              <div class="log-col-header"><i data-lucide="sun" class="log-cat-icon yellow" style="color:var(--yellow)"></i> Đèn LED</div>
-              <div id="activity-log-list-den" class="log-list-scroll">
-                <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:13px">Chưa có hoạt động nào.</p>
-              </div>
-            </div>
-            <div class="log-col-box">
-              <div class="log-col-header"><i data-lucide="droplet" class="log-cat-icon blue" style="color:var(--light-blue)"></i> Máy bơm</div>
-              <div id="activity-log-list-bom" class="log-list-scroll">
-                <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:13px">Chưa có hoạt động nào.</p>
-              </div>
-            </div>
->>>>>>> f30acb0cc7dde880c8f56f8287db25245542ced9
+          <div id="activity-log-list" class="log-list-scroll">
+            <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:13px">Chưa có hoạt động nào.</p>
           </div>
         </div>
 
@@ -321,9 +305,9 @@ export const appHTML = /* html */`
           <div class="tl-date">Dự kiến: 11/2023</div>
         </div>
 
-        <div class="tl-capture">
-          <i data-lucide="camera" style="width:32px;height:32px;margin-bottom:8px"></i>
-          Chụp ảnh cập nhật
+        <div class="tl-capture" style="opacity: 0.7; cursor: not-allowed;" onclick="alert('Tính năng chụp ảnh cập nhật sẽ được phát triển sau!');" title="Tính năng phát triển sau">
+          <i data-lucide="camera" style="width:32px;height:32px;margin-bottom:8px; color: #8A968C;"></i>
+          <span style="color: #8A968C;">Chụp ảnh (Phát triển sau)</span>
         </div>
 
       </div>
@@ -338,9 +322,10 @@ export const appHTML = /* html */`
       <div class="settings-col-left">
         <div class="card profile-card">
           <img src="./doc.jpg" alt="Linh Garden" />
-          <h3>Linh Garden</h3>
+          <h3 id="profile-display-name">Linh Garden</h3>
+          <p id="profile-display-email">Đang tải email...</p>
           <p>Thành viên từ: 05/2023</p>
-          <button class="btn-outline dark"><i data-lucide="user" style="width:18px;height:18px"></i> Chỉnh sửa hồ sơ</button>
+          <button class="btn-outline dark" id="btn-edit-profile"><i data-lucide="user" style="width:18px;height:18px"></i> Chỉnh sửa hồ sơ</button>
           <button class="btn-outline" id="btn-logout"><i data-lucide="log-out" style="width:18px;height:18px"></i> Đăng xuất</button>
         </div>
 
@@ -464,6 +449,33 @@ export const appHTML = /* html */`
       </div>
       <div class="modal-body" id="pump-history-content">
         <p style="color:#8A968C;text-align:center;padding:20px 0;font-size:14px">Đang tải dữ liệu...</p>
+      </div>
+    </div>
+  </div>
+  <!-- Modal Chỉnh sửa hồ sơ -->
+  <div id="modal-edit-profile" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3><i data-lucide="user" style="color:var(--primary-green); width:20px; height:20px;"></i> Chỉnh sửa hồ sơ</h3>
+        <button class="btn-close-modal" id="btn-close-profile-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom: 6px; color: var(--dark-green);">Tên đăng nhập</label>
+          <input type="text" id="edit-profile-username" readonly style="width:100%; border:1.5px solid #ccc; background:#f5f5f5; padding:8px 12px; border-radius:8px; font-size:14px; outline:none; box-sizing: border-box;" />
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom: 6px; color: var(--dark-green);">Email liên hệ</label>
+          <input type="email" id="edit-profile-email" placeholder="example@gmail.com" style="width:100%; border:1.5px solid var(--dark-green); padding:8px 12px; border-radius:8px; font-size:14px; outline:none; box-sizing: border-box;" />
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom: 6px; color: var(--dark-green);">Mật khẩu mới (bỏ trống nếu không đổi)</label>
+          <input type="password" id="edit-profile-password" placeholder="Nhập mật khẩu mới" style="width:100%; border:1.5px solid var(--dark-green); padding:8px 12px; border-radius:8px; font-size:14px; outline:none; box-sizing: border-box;" />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button class="btn-outline" id="btn-cancel-profile" style="padding: 8px 16px;">Hủy</button>
+          <button class="btn-water" id="btn-save-profile" style="padding: 8px 16px; background: var(--primary-green); color: white;">Lưu thay đổi</button>
+        </div>
       </div>
     </div>
   </div>

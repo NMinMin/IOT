@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import dns from 'node:dns';
+import nodemailer from 'nodemailer';
 
 // Thiết lập DNS của Google để sửa lỗi querySrv ECONNREFUSED khi kết nối MongoDB Atlas
 dns.setServers(['8.8.8.8', '8.8.4.4']);
@@ -44,7 +45,8 @@ async function migrateActivityLogs() {
 // Định nghĩa Schema cho Tài Khoản Người Dùng (Users)
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+  password: { type: String, required: true },
+  email: { type: String, default: 'vonhacphuoc@gmail.com' }
 });
 
 const User = mongoose.model('User', userSchema, 'users');
@@ -56,10 +58,15 @@ async function seedDefaultUser() {
     if (!userExist) {
       const defaultUser = new User({
         username: 'nhacphuoc25',
-        password: '02082005'
+        password: '02082005',
+        email: 'vonhacphuoc@gmail.com'
       });
       await defaultUser.save();
-      console.log('>>> Đã tạo tài khoản mặc định trong MongoDB Atlas: nhacphuoc25 / 02082005');
+      console.log('>>> Đã tạo tài khoản mặc định trong MongoDB Atlas: nhacphuoc25 / 02082005 / vonhacphuoc@gmail.com');
+    } else if (!userExist.email) {
+      userExist.email = 'vonhacphuoc@gmail.com';
+      await userExist.save();
+      console.log('>>> Đã cập nhật email mặc định cho người dùng nhacphuoc25.');
     }
   } catch (err) {
     console.error('Lỗi khi khởi tạo tài khoản mặc định:', err);
@@ -267,13 +274,13 @@ app.get('/api/activity', async (req, res) => {
   }
 });
 
-// GET /api/activity/list – lấy nhật ký phân trang theo mục (den / bom / canh_bao)
+// GET /api/activity/list – lấy nhật ký phân trang theo mục (den / bom / canh_bao / all)
 app.get('/api/activity/list', async (req, res) => {
-  const { category, limit = 10, skip = 0 } = req.query;
+  const { category = 'all', limit = 10, skip = 0 } = req.query;
   const lim = parseInt(limit);
   const skp = parseInt(skip);
   
-  if (!['den', 'bom', 'canh_bao'].includes(category)) {
+  if (!['den', 'bom', 'canh_bao', 'all'].includes(category)) {
     return res.status(400).json({ error: 'Category không hợp lệ.' });
   }
   
@@ -282,13 +289,24 @@ app.get('/api/activity/list', async (req, res) => {
     let allEntries = [];
     
     for (const day of days) {
-      const entries = day[category] || [];
-      const reversed = [...entries].reverse().map(e => ({
-        date: day.date,
-        time: e.time,
-        action: e.action
-      }));
-      allEntries.push(...reversed);
+      const cats = category === 'all' ? ['den', 'bom', 'canh_bao'] : [category];
+      const dayEntries = [];
+      
+      for (const cat of cats) {
+        const entries = day[cat] || [];
+        entries.forEach(e => {
+          dayEntries.push({
+            date: day.date,
+            time: e.time,
+            action: e.action,
+            category: cat
+          });
+        });
+      }
+      
+      // Sắp xếp các entry trong cùng một ngày theo thời gian giảm dần
+      dayEntries.sort((a, b) => b.time.localeCompare(a.time));
+      allEntries.push(...dayEntries);
     }
     
     const paginated = allEntries.slice(skp, skp + lim);
@@ -457,6 +475,201 @@ setInterval(syncFirebaseToMongo, syncIntervalMs);
 
 // Thực hiện đồng bộ ngay một lần khi khởi động server
 setTimeout(syncFirebaseToMongo, 3000);
+
+// GET /api/monthly-summary – Tổng kết tháng hiện tại và so sánh tháng trước
+app.get('/api/monthly-summary', async (req, res) => {
+  try {
+    const now = new Date();
+    const vnNow = new Date(now.getTime() + 7 * 3600000);
+    const year = vnNow.getUTCFullYear();
+    const month = vnNow.getUTCMonth() + 1; // 1–12
+
+    // Khoảng ngày tháng này và tháng trước
+    const thisMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const thisMonthEnd   = `${year}-${String(month).padStart(2, '0')}-31`;
+
+    const prevMonthNum  = month === 1 ? 12 : month - 1;
+    const prevMonthYear = month === 1 ? year - 1 : year;
+    const prevMonthStart = `${prevMonthYear}-${String(prevMonthNum).padStart(2, '0')}-01`;
+    const prevMonthEnd   = `${prevMonthYear}-${String(prevMonthNum).padStart(2, '0')}-31`;
+
+    // 1. Lượng nước tháng này và tháng trước
+    const [thisWater, prevWater] = await Promise.all([
+      DailyWater.find({ date: { $gte: thisMonthStart, $lte: thisMonthEnd } }),
+      DailyWater.find({ date: { $gte: prevMonthStart, $lte: prevMonthEnd } })
+    ]);
+
+    const thisWaterTotal = thisWater.reduce((s, r) => s + r.amount_ml, 0);
+    const prevWaterTotal = prevWater.reduce((s, r) => s + r.amount_ml, 0);
+
+    // Tính % tiết kiệm nước so với tháng trước (dương = tiết kiệm, âm = tăng)
+    let waterSavingPct = null;
+    if (prevWaterTotal > 0) {
+      waterSavingPct = Math.round(((prevWaterTotal - thisWaterTotal) / prevWaterTotal) * 100);
+    }
+
+    // 2. Số lần tưới tự động tháng này (đếm bom entries trong activity_logs)
+    const thisActivityDays = await ActivityLog.find({
+      date: { $gte: thisMonthStart, $lte: thisMonthEnd }
+    });
+    let autoPumpCount = 0;
+    thisActivityDays.forEach(day => {
+      (day.bom || []).forEach(e => {
+        if (e.action && e.action.toLowerCase().includes('tự động')) autoPumpCount++;
+      });
+    });
+
+    // 3. TB cường độ ánh sáng tháng này (từ sensor_logs)
+    const thisMonthStartDate = new Date(`${thisMonthStart}T00:00:00+07:00`);
+    const sensorLogs = await SensorLog.find({
+      timestamp: { $gte: thisMonthStartDate }
+    }).select('lux');
+
+    let avgLux = null;
+    if (sensorLogs.length > 0) {
+      avgLux = Math.round(sensorLogs.reduce((s, l) => s + (l.lux || 0), 0) / sensorLogs.length);
+    }
+
+    res.json({
+      month,
+      year,
+      avg_lux: avgLux,
+      auto_pump_count: autoPumpCount,
+      water_saving_pct: waterSavingPct,
+      this_water_ml: thisWaterTotal,
+      prev_water_ml: prevWaterTotal
+    });
+  } catch (error) {
+    console.error('Lỗi GET /api/monthly-summary:', error);
+    res.status(500).json({ error: 'Không thể lấy tổng kết tháng.' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// Email Alert: Cảnh báo hết nước qua Gmail
+// ══════════════════════════════════════════════
+let _waterAlertSentAt = null; // Chống gửi email spam – chỉ gửi mỗi 30 phút
+
+function createMailTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.ALERT_EMAIL_FROM,
+      pass: process.env.ALERT_EMAIL_PASS
+    }
+  });
+}
+
+async function sendWaterLowEmail() {
+  const now = Date.now();
+  // Chỉ gửi nếu chưa gửi hoặc đã qua 30 phút
+  if (_waterAlertSentAt && now - _waterAlertSentAt < 30 * 60 * 1000) {
+    console.log('>>> [Email] Đã gửi cảnh báo gần đây, bỏ qua để tránh spam.');
+    return { skipped: true };
+  }
+
+  // Lấy email từ MongoDB của user nhacphuoc25
+  let recipientEmail = process.env.ALERT_EMAIL_TO;
+  try {
+    const user = await User.findOne({ username: 'nhacphuoc25' });
+    if (user && user.email) {
+      recipientEmail = user.email;
+    }
+  } catch (dbErr) {
+    console.error('>>> [Email] Lỗi khi truy vấn email người nhận từ DB:', dbErr);
+  }
+
+  const transporter = createMailTransporter();
+  const timeStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+  const mailOptions = {
+    from: `"Vườn Sen Đá 🌵" <${process.env.ALERT_EMAIL_FROM}>`,
+    to: recipientEmail,
+    subject: '🚨 CẢNH BÁO: Bể nước đã cạn! Cần châm nước ngay!',
+    html: `
+      <div style="font-family: 'Arial', sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9f5; border-radius: 12px; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #2c5a3e, #4a8a60); padding: 32px; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">🌵 Vườn Sen Đá Của Tôi</h1>
+          <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0;">Hệ thống giám sát thông minh</p>
+        </div>
+        <div style="padding: 32px;">
+          <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+            <h2 style="color: #856404; margin: 0 0 8px; font-size: 20px;">⚠️ CẢNH BÁO: Bể Nước Đã Cạn!</h2>
+            <p style="color: #856404; margin: 0; font-size: 15px;">Cảm biến xác nhận bể chứa nước của vườn sen đá đã hết nước.</p>
+          </div>
+          <p style="color: #4a6050; font-size: 15px; line-height: 1.6;">Hệ thống tưới tự động sẽ <strong>không hoạt động</strong> cho đến khi bể được châm đầy nước trở lại. Vui lòng kiểm tra và bổ sung nước cho vườn của bạn.</p>
+          <div style="background: white; border: 1px solid #d4e9c8; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0; color: #2c5a3e; font-size: 14px;"><strong>📅 Thời điểm cảnh báo:</strong> ${timeStr}</p>
+            <p style="margin: 8px 0 0; color: #2c5a3e; font-size: 14px;"><strong>📍 Thiết bị:</strong> Vườn Sen Đá Thông Minh</p>
+          </div>
+          <div style="text-align: center; margin-top: 28px;">
+            <p style="color: #8a968c; font-size: 13px;">Email này được gửi tự động từ hệ thống giám sát vườn sen đá.</p>
+          </div>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    _waterAlertSentAt = now;
+    console.log(`>>> [Email] Đã gửi cảnh báo hết nước tới ${recipientEmail} lúc ${timeStr}`);
+    return { sent: true };
+  } catch (err) {
+    console.error('>>> [Email] Lỗi khi gửi email cảnh báo:', err.message);
+    return { error: err.message };
+  }
+}
+
+// GET /api/user/profile – Lấy thông tin tài khoản người dùng
+app.get('/api/user/profile', async (req, res) => {
+  const { username } = req.query;
+  if (!username) {
+    return res.status(400).json({ error: 'Thiếu tham số username.' });
+  }
+  try {
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+    }
+    res.json({ username: user.username, email: user.email || '' });
+  } catch (error) {
+    console.error('Lỗi GET /api/user/profile:', error);
+    res.status(500).json({ error: 'Lỗi máy chủ khi lấy hồ sơ.' });
+  }
+});
+
+// PUT /api/user/profile – Cập nhật thông tin tài khoản
+app.put('/api/user/profile', async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username) {
+    return res.status(400).json({ error: 'Thiếu tham số username.' });
+  }
+  try {
+    const updateData = {};
+    if (email !== undefined) updateData.email = email;
+    if (password) updateData.password = password;
+
+    const user = await User.findOneAndUpdate({ username }, updateData, { new: true });
+    if (!user) {
+      return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+    }
+    res.json({ success: true, username: user.username, email: user.email });
+  } catch (error) {
+    console.error('Lỗi PUT /api/user/profile:', error);
+    res.status(500).json({ error: 'Lỗi máy chủ khi cập nhật hồ sơ.' });
+  }
+});
+
+// POST /api/alert/water-low – Frontend gọi khi phát hiện hết nước
+app.post('/api/alert/water-low', async (req, res) => {
+  try {
+    const result = await sendWaterLowEmail();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Khởi động server Express
 app.listen(PORT, () => {

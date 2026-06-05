@@ -66,14 +66,10 @@ export { WATER_PER_MANUAL_PCT, saveTankWater, getTankWater };
    NHẬT KÝ HOẠT ĐỘNG
    ══════════════════════════════════════════════ */
 const ACTIVITY_LOG_KEY = 'activityLog';
-
-let skipDen = 0;
-let skipBom = 0;
-const LOG_LIMIT = 10;
-let loadingDen = false;
-let loadingBom = false;
-let noMoreDen = false;
-let noMoreBom = false;
+let skipLogs = 0;
+const LOG_LIMIT = 15;
+let loadingLogs = false;
+let noMoreLogs = false;
 let scrollListenersAttached = false;
 
 function formatLogTime(dateStr, timeStr) {
@@ -117,55 +113,53 @@ export function addActivityLog(type, title, desc) {
 }
 
 export async function loadMoreLogs(category, append = false) {
-  const containerId = category === 'den' ? 'activity-log-list-den' : 'activity-log-list-bom';
-  const container = document.getElementById(containerId);
+  const container = document.getElementById('activity-log-list');
   if (!container) return;
 
-  if (category === 'den') {
-    if (noMoreDen || loadingDen) return;
-    loadingDen = true;
-  } else {
-    if (noMoreBom || loadingBom) return;
-    loadingBom = true;
-  }
+  if (noMoreLogs || loadingLogs) return;
+  loadingLogs = true;
 
   if (!append) {
     container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:10px 0;font-size:12px">Đang tải...</p>';
   }
 
   try {
-    const skip = category === 'den' ? skipDen : skipBom;
-    const res = await fetch(`${BACKEND_URL}/api/activity/list?category=${category}&limit=${LOG_LIMIT}&skip=${skip}`);
+    const res = await fetch(`${BACKEND_URL}/api/activity/list?category=${category}&limit=${LOG_LIMIT}&skip=${skipLogs}`);
     if (res.ok) {
       const data = await res.json();
       
-      if (category === 'den') {
-        loadingDen = false;
-        if (data.length < LOG_LIMIT) noMoreDen = true;
-        skipDen += data.length;
-      } else {
-        loadingBom = false;
-        if (data.length < LOG_LIMIT) noMoreBom = true;
-        skipBom += data.length;
-      }
+      loadingLogs = false;
+      if (data.length < LOG_LIMIT) noMoreLogs = true;
+      skipLogs += data.length;
 
       if (!append && data.length === 0) {
         container.innerHTML = '<p style="color:#8A968C;text-align:center;padding:20px 0;font-size:12px">Chưa có hoạt động nào.</p>';
         return;
       }
 
-      const icon = category === 'den' ? 'sun' : 'droplet';
-      const color = category === 'den' ? 'yellow' : 'blue';
+      const html = data.map(e => {
+        // Lấy category thực tế của entry (nếu query là 'all' thì backend trả về e.category)
+        const itemCat = e.category || category;
+        let icon = 'sun';
+        let color = 'yellow';
+        if (itemCat === 'bom') {
+          icon = 'droplet';
+          color = 'blue';
+        } else if (itemCat === 'canh_bao') {
+          icon = 'alert-triangle';
+          color = 'red';
+        }
 
-      const html = data.map(e => `
-        <div class="log-item" style="border-bottom:1px solid #F0F2EA; padding: 10px 0; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-          <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
-            <div class="log-icon ${color}" style="width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i data-lucide="${icon}"></i></div>
-            <div class="log-info" style="font-size:13px; color:var(--dark-green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${e.action}</strong></div>
+        return `
+          <div class="log-item">
+            <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+              <div class="log-icon ${color}"><i data-lucide="${icon}"></i></div>
+              <div class="log-info" style="font-size:13px; color:var(--dark-green); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${e.action}</strong></div>
+            </div>
+            <span class="log-time" style="font-size:11px; color:#8A968C; flex-shrink:0;">${formatLogTime(e.date, e.time)}</span>
           </div>
-          <span class="log-time" style="font-size:11px; color:#8A968C; flex-shrink:0;">${formatLogTime(e.date, e.time)}</span>
-        </div>
-      `).join('');
+        `;
+      }).join('');
 
       if (append) {
         const tempDiv = document.createElement('div');
@@ -183,43 +177,69 @@ export async function loadMoreLogs(category, append = false) {
     }
   } catch (err) {
     console.error('Lỗi khi tải nhật ký phân trang:', err);
-    if (category === 'den') loadingDen = false;
-    else loadingBom = false;
+    loadingLogs = false;
   }
 }
 
 export function renderActivityLog() {
-  skipDen = 0;
-  skipBom = 0;
-  noMoreDen = false;
-  noMoreBom = false;
-  loadingDen = false;
-  loadingBom = false;
+  skipLogs = 0;
+  noMoreLogs = false;
+  loadingLogs = false;
 
-  loadMoreLogs('den', false);
-  loadMoreLogs('bom', false);
+  const chips = document.querySelectorAll('.log-filter-chip');
+  chips.forEach(c => c.classList.toggle('active', c.dataset.cat === 'all'));
+
+  loadMoreLogs('all', false);
 
   setupLogScrollListeners();
+  setupLogFilter();
+}
+
+function setupLogFilter() {
+  const toggle = document.getElementById('log-filter-toggle');
+  const dropdown = document.getElementById('log-filter-dropdown');
+  const chips = document.querySelectorAll('.log-filter-chip');
+
+  if (!toggle || !dropdown) return;
+
+  // Toggle dropdown
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('hidden');
+  });
+
+  // Close on outside click
+  document.addEventListener('click', () => dropdown.classList.add('hidden'));
+  dropdown.addEventListener('click', (e) => e.stopPropagation());
+
+  // Filter chips
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const cat = chip.dataset.cat;
+
+      skipLogs = 0;
+      noMoreLogs = false;
+      loadingLogs = false;
+
+      loadMoreLogs(cat, false);
+
+      dropdown.classList.add('hidden');
+    });
+  });
 }
 
 function setupLogScrollListeners() {
   if (scrollListenersAttached) return;
   
-  const denScroll = document.getElementById('activity-log-list-den');
-  const bomScroll = document.getElementById('activity-log-list-bom');
-  
-  if (denScroll) {
-    denScroll.addEventListener('scroll', () => {
-      if (denScroll.scrollTop + denScroll.clientHeight >= denScroll.scrollHeight - 10) {
-        loadMoreLogs('den', true);
-      }
-    });
-  }
-  
-  if (bomScroll) {
-    bomScroll.addEventListener('scroll', () => {
-      if (bomScroll.scrollTop + bomScroll.clientHeight >= bomScroll.scrollHeight - 10) {
-        loadMoreLogs('bom', true);
+  const scrollContainer = document.getElementById('activity-log-list');
+  if (scrollContainer) {
+    scrollContainer.addEventListener('scroll', () => {
+      if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 10) {
+        const activeChip = document.querySelector('.log-filter-chip.active');
+        const cat = activeChip ? activeChip.dataset.cat : 'all';
+        loadMoreLogs(cat, true);
       }
     });
   }
@@ -517,10 +537,14 @@ function updateUIFromFirebaseState() {
 
   // 2. Cập nhật trạng thái nước và cảnh báo
   const alertWaterLow = document.getElementById('alert-water-low');
-  const isWaterLow = state.sensor.water_status === 'HET_NUOC';
+  const globalWaterAlert = document.getElementById('global-water-alert');
+  const isWaterLow = state.sensor.water_status === 'HET_NUOC' || getTankWater() < 5;
   
   if (alertWaterLow) {
     alertWaterLow.classList.toggle('hidden', !isWaterLow);
+  }
+  if (globalWaterAlert) {
+    globalWaterAlert.classList.toggle('hidden', !isWaterLow);
   }
   
   if (isWaterLow) {
@@ -529,8 +553,14 @@ function updateUIFromFirebaseState() {
       window._waterLowLogged = true;
       addActivityLog('water_low', 'Cảnh báo: Hết nước!', 'Cảm biến xác nhận bể chứa đã cạn.');
     }
+    if (!window._waterAlertEmailSent) {
+      window._waterAlertEmailSent = true;
+      fetch(`${BACKEND_URL}/api/alert/water-low`, { method: 'POST' })
+        .catch(err => console.warn('Không thể gửi email cảnh báo:', err));
+    }
   } else {
     window._waterLowLogged = false;
+    window._waterAlertEmailSent = false;
   }
   setWaterValue(getTankWater(), 0, 100);
 
@@ -1024,60 +1054,78 @@ export async function renderMonthlySummary() {
   const card = document.querySelector('.monthly-card');
   if (!card) return;
 
-  const currentMonth = new Date().getMonth() + 1;
-
-  // 1. Lấy dữ liệu cảm biến từ MongoDB để tính sức khỏe trung bình
-  let logs = [];
+  // Gọi API tổng kết tháng từ server
+  let summary = null;
   try {
-    const res = await fetch(`${BACKEND_URL}/api/logs`);
-    if (res.ok) {
-      logs = await res.json();
-    }
+    const res = await fetch(`${BACKEND_URL}/api/monthly-summary`);
+    if (res.ok) summary = await res.json();
   } catch (err) {
-    console.warn('Lỗi khi tải log cho tổng kết tháng:', err);
+    console.warn('Lỗi khi tải tổng kết tháng:', err);
   }
 
-  // Cường độ ánh sáng trung bình: tính từ field lux trong sensor logs
-  let avgLux = 0; // fallback mặc định
-  if (logs.length > 0) {
-    const totalLux = logs.reduce((acc, log) => acc + (log.lux || 0), 0);
-    avgLux = Math.round(totalLux / logs.length);
+  const monthEl    = document.getElementById('monthly-month');
+  const luxEl      = document.getElementById('monthly-lux');
+  const pumpEl     = document.getElementById('monthly-pump');
+  const waterEl    = document.getElementById('monthly-water');
+
+  if (!monthEl || !luxEl || !pumpEl || !waterEl) return;
+
+  if (!summary) {
+    // Nếu API lỗi, hiển thị placeholder
+    monthEl.textContent = new Date().getMonth() + 1;
+    luxEl.textContent   = '--';
+    pumpEl.textContent  = '--';
+    waterEl.textContent = 'Chưa có dữ liệu';
+    return;
   }
 
-  // 2. Lấy dữ liệu hoạt động từ localStorage để tính số lần tưới tự động
-  const days = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || '[]');
-  let autoPumpCount = 0;
-  let manualPumpCount = 0;
-  days.forEach(day => {
-    if (Array.isArray(day.bom)) {
-      day.bom.forEach(log => {
-        const actionLower = log.action.toLowerCase();
-        if (actionLower.includes('tự động')) {
-          autoPumpCount++;
-        } else if (actionLower.includes('thủ công') || actionLower.includes('bật máy bơm')) {
-          manualPumpCount++;
-        }
-      });
+  // Tháng
+  monthEl.textContent = summary.month;
+
+  // Cường độ ánh sáng TB
+  luxEl.textContent = summary.avg_lux !== null
+    ? `${summary.avg_lux.toLocaleString('vi-VN')} lux`
+    : '--';
+
+  // Số lần tưới tự động
+  pumpEl.textContent = `${summary.auto_pump_count} lần`;
+
+  // Tiết kiệm nước so với tháng trước
+  if (summary.water_saving_pct === null) {
+    waterEl.textContent = 'Chưa có dữ liệu so sánh';
+    waterEl.style.color = '#8A968C';
+    waterEl.style.fontSize = '12px';
+  } else {
+    const pct = summary.water_saving_pct;
+    if (pct >= 0) {
+      waterEl.textContent = `+${pct}% (tiết kiệm hơn tháng trước)`;
+      waterEl.style.color = 'var(--primary-green)';
+    } else {
+      waterEl.textContent = `${pct}% (dùng nhiều hơn tháng trước)`;
+      waterEl.style.color = 'var(--red-alert, #e74c3c)';
     }
-  });
-
-  // Tính phần trăm tiết kiệm nước
-  // Mỗi lần tự động: 5s (40ml). Thủ công: 10s (120ml).
-  // Tiết kiệm nước dựa trên tỷ lệ tự động / tổng số lần tưới
-  const totalPumps = autoPumpCount + manualPumpCount;
-  const savingsPct = totalPumps > 0
-    ? Math.round((autoPumpCount / totalPumps) * 15 + 5)
-    : 12;
-
-  // Render lại nội dung thẻ
-  card.innerHTML = `
-    <h3><i data-lucide="award" style="color:var(--yellow);fill:var(--yellow)"></i> Tổng Kết Tháng ${currentMonth}</h3>
-    <div class="monthly-row"><span>Cường độ ánh sáng TB</span><strong style="color:var(--yellow)">${avgLux} lux</strong></div>
-    <div class="monthly-row"><span>Số lần tưới tự động</span><strong style="color:var(--light-blue)">${autoPumpCount} lần</strong></div>
-    <div class="monthly-row"><span>Tiết kiệm nước</span><strong style="color:var(--primary-green)">+${savingsPct}%</strong></div>
-  `;
+    waterEl.style.fontSize = '12px';
+  }
 
   if (typeof lucide !== 'undefined') lucide.createIcons({ root: card });
 }
+
+export async function loadUserProfile(username) {
+  if (!username) return;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/user/profile?username=${encodeURIComponent(username)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const nameEl = document.getElementById('profile-display-name');
+      const emailEl = document.getElementById('profile-display-email');
+      if (nameEl) nameEl.textContent = data.username || username;
+      if (emailEl) emailEl.textContent = data.email || 'Chưa thiết lập email';
+      return data;
+    }
+  } catch (err) {
+    console.error('Lỗi khi tải thông tin hồ sơ:', err);
+  }
+}
+
 
 
